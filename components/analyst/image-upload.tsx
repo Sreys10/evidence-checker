@@ -7,10 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Upload,
   X,
-  Image as ImageIcon,
   File,
   CheckCircle2,
-  AlertCircle,
   Loader2,
 } from "lucide-react";
 

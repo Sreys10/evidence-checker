@@ -11,7 +11,6 @@ import {
   Mail,
   FileCheck,
   Calendar,
-  User,
   Image as ImageIcon,
   CheckCircle2,
   AlertTriangle,

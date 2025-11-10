@@ -10,9 +10,6 @@ import {
   CheckCircle2,
   Loader2,
   Image as ImageIcon,
-  FileText,
-  Shield,
-  Eye,
 } from "lucide-react";
 
 interface DetectionResult {

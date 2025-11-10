@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -26,12 +26,9 @@ import {
   Link as LinkIcon,
   Menu,
   User,
-  Mail,
-  Calendar,
   Bell,
   HelpCircle,
   Camera,
-  Upload as UploadIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

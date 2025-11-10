@@ -95,17 +95,17 @@ export default function SignupPage() {
     },
   };
 
-  const formVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.6 * animationSpeed,
-        ease: [0.42, 0, 0.58, 1] as const,
-      },
-    },
-  };
+  // const formVariants = {
+  //   hidden: { opacity: 0, y: 20 },
+  //   visible: {
+  //     opacity: 1,
+  //     y: 0,
+  //     transition: {
+  //       duration: 0.6 * animationSpeed,
+  //       ease: [0.42, 0, 0.58, 1] as const,
+  //     },
+  //   },
+  // };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 10 },

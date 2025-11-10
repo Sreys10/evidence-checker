@@ -13,7 +13,6 @@ import {
   Copy,
   ExternalLink,
   Shield,
-  FileText,
   Image as ImageIcon,
 } from "lucide-react";
 

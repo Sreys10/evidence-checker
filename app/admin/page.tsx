@@ -47,6 +47,28 @@ interface User {
   status?: "online" | "offline";
 }
 
+// Notification interface
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  reportId?: string;
+  reportData?: {
+    fileName: string;
+    evidenceName: string;
+    status: "authentic" | "tampered";
+    confidence: number;
+    generatedDate: string;
+    generatedBy?: {
+      name: string;
+      email: string;
+    };
+  };
+  timestamp: string;
+  read: boolean;
+}
+
 // Helper function to format time ago
 const getTimeAgo = (date: string | Date | undefined): string => {
   if (!date) return "Never";
@@ -96,7 +118,7 @@ export default function AdminPage() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const loadNotifications = () => {
     const savedNotifications = localStorage.getItem('adminNotifications');
