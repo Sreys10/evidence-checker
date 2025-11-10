@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ImageUpload from "@/components/analyst/image-upload";
 import TamperingDetection from "@/components/analyst/tampering-detection";
 import ReportGeneration from "@/components/analyst/report-generation";
@@ -26,8 +27,40 @@ import BlockchainUpload from "@/components/analyst/blockchain-upload";
 
 type ActiveTab = "upload" | "detect" | "report" | "records" | "blockchain";
 
+interface User {
+  _id?: string;
+  name: string;
+  email: string;
+  userType: "admin" | "analyst" | "verifier" | "guest";
+}
+
 export default function AnalystPage() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("upload");
+
+  useEffect(() => {
+    // Get current user from localStorage
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setCurrentUser(user);
+      
+      // Redirect if not analyst
+      if (user.userType !== 'analyst') {
+        router.push('/login');
+        return;
+      }
+    } else {
+      router.push('/login');
+      return;
+    }
+  }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    router.push('/login');
+  };
 
   const tabs = [
     { id: "upload" as ActiveTab, label: "Upload Evidence", icon: Upload },
@@ -44,7 +77,9 @@ export default function AnalystPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Analyst Dashboard</h1>
+              <h1 className="text-3xl font-bold text-foreground">
+                {currentUser ? `Hi ${currentUser.name}, welcome back!` : 'Analyst Dashboard'}
+              </h1>
               <p className="text-muted-foreground mt-1">
                 Upload, analyze, and manage digital evidence
               </p>
@@ -56,11 +91,9 @@ export default function AnalystPage() {
                   Settings
                 </Link>
               </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/login">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Link>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
               </Button>
             </div>
           </div>

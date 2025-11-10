@@ -12,17 +12,41 @@ export default function LoginPage() {
   const [userType, setUserType] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const animationSpeed = 0.8;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setIsLoading(true);
-    // Implement login logic here
-    console.log("Login attempt with:", { email, password, userType });
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          userType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Login failed");
+        setIsLoading(false);
+        return;
+      }
+
+      // Store user info in localStorage
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
+
       // Redirect based on user type
       if (userType === "admin") {
         router.push("/admin");
@@ -32,7 +56,10 @@ export default function LoginPage() {
         // Redirect to dashboard or other pages for other user types
         router.push("/dashboard");
       }
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || "An error occurred during login");
+      setIsLoading(false);
+    }
   };
 
   const containerVariants = {
@@ -307,6 +334,17 @@ export default function LoginPage() {
         </motion.div>
       </motion.div>
     </div>
+
+    {/* Error Message */}
+    {error && (
+      <motion.div
+        className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        {error}
+      </motion.div>
+    )}
 
     {/* Remember Me + Forgot Password */}
     <motion.div

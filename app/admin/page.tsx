@@ -13,86 +13,45 @@ import {
   Settings, 
   LogOut,
   Search,
-  Filter,
   MoreVertical,
   Mail,
-  Phone,
-  Calendar,
-  MapPin
+  Calendar
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-// Mock user data - replace with actual API calls
+// User interface matching the database
 interface User {
-  id: string;
+  _id?: string;
   name: string;
   email: string;
   userType: "admin" | "analyst" | "verifier" | "guest";
-  lastLogin: string;
-  status: "online" | "offline";
-  phone?: string;
-  location?: string;
-  joinDate: string;
-  avatar?: string;
+  lastLogin?: string | Date;
+  createdAt?: string | Date;
+  status?: "online" | "offline";
 }
 
-const mockUsers: User[] = [
-  {
-    id: "1",
-    name: "John Doe",
-    email: "john.doe@example.com",
-    userType: "analyst",
-    lastLogin: "2 minutes ago",
-    status: "online",
-    phone: "+1 234-567-8900",
-    location: "New York, USA",
-    joinDate: "2024-01-15",
-  },
-  {
-    id: "2",
-    name: "Jane Smith",
-    email: "jane.smith@example.com",
-    userType: "verifier",
-    lastLogin: "15 minutes ago",
-    status: "online",
-    phone: "+1 234-567-8901",
-    location: "Los Angeles, USA",
-    joinDate: "2024-02-20",
-  },
-  {
-    id: "3",
-    name: "Bob Johnson",
-    email: "bob.johnson@example.com",
-    userType: "guest",
-    lastLogin: "1 hour ago",
-    status: "offline",
-    phone: "+1 234-567-8902",
-    location: "Chicago, USA",
-    joinDate: "2024-03-10",
-  },
-  {
-    id: "4",
-    name: "Alice Williams",
-    email: "alice.williams@example.com",
-    userType: "analyst",
-    lastLogin: "30 minutes ago",
-    status: "online",
-    phone: "+1 234-567-8903",
-    location: "Houston, USA",
-    joinDate: "2024-01-05",
-  },
-  {
-    id: "5",
-    name: "Charlie Brown",
-    email: "charlie.brown@example.com",
-    userType: "verifier",
-    lastLogin: "3 hours ago",
-    status: "offline",
-    phone: "+1 234-567-8904",
-    location: "Phoenix, USA",
-    joinDate: "2024-02-28",
-  },
-];
+// Helper function to format time ago
+const getTimeAgo = (date: string | Date | undefined): string => {
+  if (!date) return "Never";
+  const now = new Date();
+  const loginDate = new Date(date);
+  const diffInSeconds = Math.floor((now.getTime() - loginDate.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return "Just now";
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+  return `${Math.floor(diffInSeconds / 86400)} days ago`;
+};
+
+// Helper function to determine if user is online (logged in within last 15 minutes)
+const isUserOnline = (lastLogin: string | Date | undefined): boolean => {
+  if (!lastLogin) return false;
+  const now = new Date();
+  const loginDate = new Date(lastLogin);
+  const diffInMinutes = (now.getTime() - loginDate.getTime()) / (1000 * 60);
+  return diffInMinutes < 15;
+};
 
 const getUserTypeColor = (userType: string) => {
   switch (userType) {
@@ -110,10 +69,58 @@ const getUserTypeColor = (userType: string) => {
 };
 
 export default function AdminPage() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Get current user from localStorage
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setCurrentUser(user);
+      
+      // Redirect if not admin
+      if (user.userType !== 'admin') {
+        router.push('/login');
+        return;
+      }
+    } else {
+      router.push('/login');
+      return;
+    }
+
+    // Fetch all users
+    fetchUsers();
+  }, [router]);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/users');
+      if (response.ok) {
+        const data = await response.json();
+        // Map users to include status based on lastLogin
+        const usersWithStatus = data.users.map((user: User) => ({
+          ...user,
+          status: isUserOnline(user.lastLogin) ? 'online' : 'offline',
+        }));
+        setUsers(usersWithStatus);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    router.push('/login');
+  };
 
   const onlineUsers = users.filter((u) => u.status === "online").length;
   const totalUsers = users.length;
@@ -160,7 +167,9 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+              <h1 className="text-3xl font-bold text-foreground">
+                {currentUser ? `Hi ${currentUser.name}, welcome back!` : 'Admin Dashboard'}
+              </h1>
               <p className="text-muted-foreground mt-1">Manage users and system settings</p>
             </div>
             <div className="flex items-center gap-3">
@@ -170,11 +179,9 @@ export default function AdminPage() {
                   Settings
                 </Link>
               </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/login">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Link>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
               </Button>
             </div>
           </div>
@@ -245,60 +252,69 @@ export default function AdminPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {filteredUsers.map((user, index) => (
-                    <motion.div
-                      key={user.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <div
-                        className={`p-4 border border-border rounded-lg cursor-pointer transition-all hover:bg-accent/50 ${
-                          selectedUser?.id === user.id ? "bg-accent border-primary" : ""
-                        }`}
-                        onClick={() => setSelectedUser(user)}
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-muted-foreground">Loading users...</div>
+                  </div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-muted-foreground">No users found</div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredUsers.map((user, index) => (
+                      <motion.div
+                        key={user._id || index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <Avatar>
-                                <AvatarImage src={user.avatar} />
-                                <AvatarFallback>
-                                  {user.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")}
-                                </AvatarFallback>
-                              </Avatar>
-                              {user.status === "online" && (
-                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold text-foreground">{user.name}</h3>
-                                <Badge
-                                  variant="outline"
-                                  className={`${getUserTypeColor(user.userType)} text-xs`}
-                                >
-                                  {user.userType}
-                                </Badge>
+                        <div
+                          className={`p-4 border border-border rounded-lg cursor-pointer transition-all hover:bg-accent/50 ${
+                            selectedUser?._id === user._id ? "bg-accent border-primary" : ""
+                          }`}
+                          onClick={() => setSelectedUser(user)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <Avatar>
+                                  <AvatarFallback>
+                                    {user.name
+                                      .split(" ")
+                                      .map((n) => n[0])
+                                      .join("")}
+                                  </AvatarFallback>
+                                </Avatar>
+                                {user.status === "online" && (
+                                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" />
+                                )}
                               </div>
-                              <p className="text-sm text-muted-foreground">{user.email}</p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Last login: {user.lastLogin}
-                              </p>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-semibold text-foreground">{user.name}</h3>
+                                  <Badge
+                                    variant="outline"
+                                    className={`${getUserTypeColor(user.userType)} text-xs`}
+                                  >
+                                    {user.userType}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground">{user.email}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Last login: {getTimeAgo(user.lastLogin)}
+                                </p>
+                              </div>
                             </div>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -356,22 +372,10 @@ export default function AdminPage() {
                     {/* Contact Information */}
                     <div className="space-y-3">
                       <h3 className="font-semibold text-foreground">Contact Information</h3>
-                      {selectedUser.phone && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Phone className="h-4 w-4" />
-                          <span>{selectedUser.phone}</span>
-                        </div>
-                      )}
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Mail className="h-4 w-4" />
                         <span>{selectedUser.email}</span>
                       </div>
-                      {selectedUser.location && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <MapPin className="h-4 w-4" />
-                          <span>{selectedUser.location}</span>
-                        </div>
-                      )}
                     </div>
 
                     {/* Activity Information */}
@@ -379,12 +383,14 @@ export default function AdminPage() {
                       <h3 className="font-semibold text-foreground">Activity</h3>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-4 w-4" />
-                        <span>Last login: {selectedUser.lastLogin}</span>
+                        <span>Last login: {getTimeAgo(selectedUser.lastLogin)}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        <span>Joined: {new Date(selectedUser.joinDate).toLocaleDateString()}</span>
-                      </div>
+                      {selectedUser.createdAt && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Calendar className="h-4 w-4" />
+                          <span>Joined: {new Date(selectedUser.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}

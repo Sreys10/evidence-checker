@@ -1,20 +1,84 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [userType, setUserType] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const animationSpeed = 0.8;
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Implement signup logic here
-    console.log("Signup attempt with:", { name, email, password });
+    setError("");
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+
+    // Validate user type
+    if (!userType) {
+      setError("Please select a user type");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          userType,
+        }),
+      });
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        setError("Server error: Received invalid response. Please check your server configuration.");
+        setIsLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Signup failed");
+        setIsLoading(false);
+        return;
+      }
+
+      // Redirect to login page on success
+      router.push("/login");
+    } catch (err: any) {
+      console.error("Signup error:", err);
+      setError(err.message || "An error occurred during signup. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const containerVariants = {
@@ -205,6 +269,33 @@ export default function SignupPage() {
               </motion.div>
             </motion.div>
 
+            <motion.div variants={itemVariants}>
+              <label className="block text-sm font-medium text-black mb-1">
+                User Type
+              </label>
+              <motion.div
+                className="relative"
+                variants={inputHoverVariants}
+                initial="rest"
+                whileHover="hover"
+              >
+                <select
+                  value={userType}
+                  onChange={(e) => setUserType(e.target.value)}
+                  className="w-full px-4 py-3 bg-white text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-300"
+                  required
+                >
+                  <option value="" disabled>
+                    Select user type
+                  </option>
+                  <option value="admin">Admin</option>
+                  <option value="analyst">Analyst</option>
+                  <option value="verifier">Verifier</option>
+                  <option value="guest">Guest</option>
+                </select>
+              </motion.div>
+            </motion.div>
+
             <div className="grid grid-cols-2 gap-4">
               <motion.div variants={itemVariants}>
                 <label className="block text-sm font-medium text-black mb-1">
@@ -249,6 +340,16 @@ export default function SignupPage() {
               </motion.div>
             </div>
 
+            {error && (
+              <motion.div
+                className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                {error}
+              </motion.div>
+            )}
+
             <motion.div className="pt-2" variants={itemVariants}>
               <div className="flex items-start">
                 <motion.input
@@ -285,31 +386,60 @@ export default function SignupPage() {
             <motion.div variants={itemVariants} className="pt-2">
               <motion.button
                 type="submit"
-                className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-200"
+                disabled={isLoading}
+                className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 variants={buttonHoverVariants}
                 initial="rest"
-                whileHover="hover"
+                whileHover={isLoading ? "rest" : "hover"}
                 whileTap="tap"
                 layoutId="authButton"
               >
-                Create Account
-                <motion.svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 ml-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  initial={{ x: 0 }}
-                  whileHover={{ x: 3 }}
-                  transition={{ type: "spring", stiffness: 400 }}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
-                </motion.svg>
+                {isLoading ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Creating Account...
+                  </>
+                ) : (
+                  <>
+                    Create Account
+                    <motion.svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6 ml-2"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      initial={{ x: 0 }}
+                      whileHover={{ x: 3 }}
+                      transition={{ type: "spring", stiffness: 400 }}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M14 5l7 7m0 0l-7 7m7-7H3"
+                      />
+                    </motion.svg>
+                  </>
+                )}
               </motion.button>
             </motion.div>
 
