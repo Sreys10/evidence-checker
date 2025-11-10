@@ -282,13 +282,12 @@ export default function AnalystPage() {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm" 
-                  asChild
+                  className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm"
+                  disabled
+                  title="Settings coming soon"
                 >
-                  <Link href="/">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
-                  </Link>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
                 </Button>
                 <Button 
                   variant="outline" 

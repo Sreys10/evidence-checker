@@ -31,6 +31,8 @@ import {
   FileText,
   X,
   CheckCircle2,
+  Download,
+  Eye,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -60,10 +62,37 @@ interface Notification {
     status: "authentic" | "tampered";
     confidence: number;
     generatedDate: string;
+    format?: "PDF" | "HTML";
     generatedBy?: {
       name: string;
       email: string;
     };
+  };
+  fullReport?: {
+    id: string;
+    fileName: string;
+    evidenceName: string;
+    imageData: string;
+    generatedDate: string;
+    generatedBy: {
+      name: string;
+      email: string;
+    };
+    status: "authentic" | "tampered";
+    confidence: number;
+    analysis?: {
+      pixelAnalysis: number;
+      metadataAnalysis: number;
+      compressionAnalysis: number;
+      overallScore: number;
+    };
+    metadata?: {
+      camera?: string;
+      date?: string;
+      location?: string;
+      software?: string;
+    };
+    anomalies?: string[];
   };
   timestamp: string;
   read: boolean;
@@ -468,6 +497,43 @@ export default function AdminPage() {
                       <p className="text-xs text-muted-foreground mt-2">
                         {new Date(notification.timestamp).toLocaleString()}
                       </p>
+                      {notification.fullReport && (
+                        <div className="mt-3 flex gap-2 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => {
+                              // Import and use downloadReport function
+                              import('@/lib/report-generator').then(({ downloadReport }) => {
+                                downloadReport(notification.fullReport!, notification.reportData?.format || "PDF");
+                              });
+                            }}
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            Download {notification.reportData?.format || "PDF"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => {
+                              // Open report in new window for viewing
+                              import('@/lib/report-generator').then(({ generateHTMLReport }) => {
+                                const htmlContent = generateHTMLReport(notification.fullReport!);
+                                const printWindow = window.open('', '_blank');
+                                if (printWindow) {
+                                  printWindow.document.write(htmlContent);
+                                  printWindow.document.close();
+                                }
+                              });
+                            }}
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View Report
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-col gap-1">
                       {!notification.read && (
@@ -587,14 +653,13 @@ export default function AdminPage() {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm" 
-                  asChild
+                  className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm"
+                  disabled
+                  title="Settings coming soon"
                 >
-                <Link href="/">
                   <Settings className="h-4 w-4 mr-2" />
                   Settings
-                </Link>
-              </Button>
+                </Button>
                 <Button 
                   variant="outline" 
                   className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm"

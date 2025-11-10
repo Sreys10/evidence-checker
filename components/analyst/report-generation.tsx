@@ -251,6 +251,24 @@ export default function ReportGeneration() {
         localStorage.getItem('adminNotifications') || '[]'
       );
 
+      // Prepare full report data for admin
+      const fullReportData: ReportData = {
+        id: report.id,
+        fileName: report.fileName,
+        evidenceName: report.evidenceName,
+        imageData: report.imageData || "",
+        generatedDate: report.generatedDate,
+        generatedBy: {
+          name: currentUser.name,
+          email: currentUser.email,
+        },
+        status: report.status,
+        confidence: report.confidence,
+        analysis: report.analysis,
+        metadata: report.metadata,
+        anomalies: report.anomalies,
+      };
+
       const notification = {
         id: `notif_${Date.now()}`,
         type: 'report',
@@ -264,7 +282,9 @@ export default function ReportGeneration() {
           confidence: report.confidence,
           generatedDate: report.generatedDate,
           generatedBy: currentUser,
+          format: report.format,
         },
+        fullReport: fullReportData, // Include complete report data
         timestamp: new Date().toISOString(),
         read: false,
       };
