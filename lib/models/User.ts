@@ -33,7 +33,7 @@ export async function createUser(userData: Omit<User, '_id' | 'createdAt' | 'upd
     updatedAt: new Date(),
   };
 
-  const result = await usersCollection.insertOne(newUser as any);
+  const result = await usersCollection.insertOne(newUser as Omit<User, '_id'>);
   
   return {
     ...newUser,
@@ -64,6 +64,7 @@ export async function getAllUsers(): Promise<Omit<User, 'password'>[]> {
   const db = await getDatabase();
   const usersCollection = db.collection<User>('users');
   const users = await usersCollection.find({}).toArray();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return users.map(({ password, ...user }) => user);
 }
 

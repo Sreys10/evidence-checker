@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Return user without password
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = updatedUser;
 
     return NextResponse.json(
@@ -63,11 +64,13 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Login error:', error);
     
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
     // Check for MongoDB connection errors
-    if (error.message?.includes('Mongo') || error.message?.includes('connection')) {
+    if (errorMessage.includes('Mongo') || errorMessage.includes('connection')) {
       return NextResponse.json(
         { error: 'Database connection error. Please check your MongoDB connection string.' },
         { status: 500 }
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: errorMessage || 'Internal server error' },
       { status: 500 }
     );
   }

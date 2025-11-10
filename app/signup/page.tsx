@@ -74,9 +74,10 @@ export default function SignupPage() {
 
       // Redirect to login page on success
       router.push("/login");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Signup error:", err);
-      setError(err.message || "An error occurred during signup. Please try again.");
+      const errorMessage = err instanceof Error ? err.message : "An error occurred during signup. Please try again.";
+      setError(errorMessage);
       setIsLoading(false);
     }
   };

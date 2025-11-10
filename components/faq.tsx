@@ -48,7 +48,7 @@ const faq = [
           Blockchain technology serves as the foundation for ensuring evidence immutability and creating an auditable trail. When evidence is verified, a cryptographic hash of the file is generated and stored on a distributed blockchain ledger. This hash acts as a unique fingerprint that cannot be altered without detection.
         </p>
         <p className="mb-3">
-          Once recorded, the evidence's authenticity can be verified at any time by comparing the current file's hash with the stored hash. The blockchain also maintains a complete audit trail showing when the evidence was uploaded, who verified it, and any subsequent access or verification attempts.
+          Once recorded, the evidence&apos;s authenticity can be verified at any time by comparing the current file&apos;s hash with the stored hash. The blockchain also maintains a complete audit trail showing when the evidence was uploaded, who verified it, and any subsequent access or verification attempts.
         </p>
         <p>
           This decentralized approach eliminates single points of failure and ensures that even if our servers are compromised, the evidence integrity records remain secure and verifiable across the entire network.
@@ -64,7 +64,7 @@ const faq = [
           Currently, our platform supports comprehensive verification for image-based evidence including JPEG, PNG, TIFF, and RAW formats. This covers photographs, screenshots, scanned documents, and digital images from various sources. Our system can analyze images up to 50MB in size with resolutions up to 4K.
         </p>
         <p className="mb-3">
-          We're actively developing support for video files (MP4, MOV, AVI) with frame-by-frame analysis capabilities, and document verification (PDF, DOCX) with metadata and content integrity checks.
+          We&apos;re actively developing support for video files (MP4, MOV, AVI) with frame-by-frame analysis capabilities, and document verification (PDF, DOCX) with metadata and content integrity checks.
         </p>
         <p>
           Future updates will include support for audio files, 3D models, and real-time verification for live evidence capture. Each file type undergoes format-specific analysis to detect type-appropriate manipulation techniques.

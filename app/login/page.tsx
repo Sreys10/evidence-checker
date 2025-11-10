@@ -56,8 +56,9 @@ export default function LoginPage() {
         // Redirect to dashboard or other pages for other user types
         router.push("/dashboard");
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred during login");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred during login";
+      setError(errorMessage);
       setIsLoading(false);
     }
   };
@@ -450,7 +451,7 @@ export default function LoginPage() {
     layoutId="authFooter"
   >
     <p className="text-muted-foreground">
-      Don't have an account?{" "}
+      Don&apos;t have an account?{" "}
       <motion.span whileHover={{ scale: 1.05 }}>
         <Link
           href="/signup"
