@@ -55,7 +55,7 @@ const HowItWorks = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-4">
           {steps.map((step, index) => (
             <div key={step.step} className="relative">
-              <Card className="flex flex-col h-full border rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 bg-white">
+              <Card className="flex flex-col h-full border rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 bg-card">
                 <CardHeader className="p-6">
                   <div className="flex items-center gap-4 mb-4">
                     <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground font-bold text-lg">
@@ -63,10 +63,10 @@ const HowItWorks = () => {
                     </div>
                     <step.icon className="w-6 h-6 text-primary" />
                   </div>
-                  <CardTitle className="text-xl font-bold tracking-tight text-gray-900">
+                  <CardTitle className="text-xl font-bold tracking-tight text-foreground">
                     {step.title}
                   </CardTitle>
-                  <CardDescription className="text-gray-600 text-sm xs:text-base mt-2">
+                  <CardDescription className="text-muted-foreground text-sm xs:text-base mt-2">
                     {step.description}
                   </CardDescription>
                 </CardHeader>

@@ -67,7 +67,7 @@ const Features = () => {
         {features.map((feature) => (
           <Card
             key={feature.title}
-            className="flex flex-col border rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 bg-white"
+            className="flex flex-col border rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 bg-card"
           >
             {/* Header with GIF */}
             <CardHeader className="p-0 relative">
@@ -79,11 +79,11 @@ const Features = () => {
                 />
               </div>
               <div className="p-6">
-                <feature.icon className="w-7 h-7 text-black mb-2" />
-                <CardTitle className="text-xl font-bold tracking-tight text-gray-900">
+                <feature.icon className="w-7 h-7 text-foreground mb-2" />
+                <CardTitle className="text-xl font-bold tracking-tight text-foreground">
                   {feature.title}
                 </CardTitle>
-                <CardDescription className="text-gray-600 text-sm xs:text-[17px] mt-1">
+                <CardDescription className="text-muted-foreground text-sm xs:text-[17px] mt-1">
                   {feature.description}
                 </CardDescription>
               </div>

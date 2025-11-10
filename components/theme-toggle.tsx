@@ -14,16 +14,28 @@ const ThemeToggle = () => {
   }, []);
 
   if (!mounted) {
-    return <Button variant="outline" size="icon" />;
+    return (
+      <Button variant="outline" size="icon" aria-label="Toggle theme">
+        <MoonIcon className="h-4 w-4" />
+      </Button>
+    );
   }
+
+  const isDark = resolvedTheme === "dark";
 
   return (
     <Button
       variant="outline"
       size="icon"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
     >
-      {resolvedTheme === "dark" ? <SunIcon /> : <MoonIcon />}
+      {isDark ? (
+        <SunIcon className="h-4 w-4" />
+      ) : (
+        <MoonIcon className="h-4 w-4" />
+      )}
     </Button>
   );
 };

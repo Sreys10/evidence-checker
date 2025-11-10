@@ -116,7 +116,7 @@ const FAQ = () => {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 mb-6">
           <HelpCircle className="w-8 h-8 text-primary" />
         </div>
-        <h2 className="text-3xl xs:text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+        <h2 className="text-3xl xs:text-4xl md:text-5xl font-bold tracking-tight text-foreground">
           Frequently Asked Questions
         </h2>
         <p className="mt-4 xs:text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -136,12 +136,12 @@ const FAQ = () => {
               value={`question-${index}`}
               className="group"
             >
-              <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:border-primary/20">
+              <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm hover:shadow-lg transition-all duration-300 hover:border-primary/20">
                 <AccordionPrimitive.Header className="flex">
                   <AccordionPrimitive.Trigger
                     className={cn(
                       "flex flex-1 items-center justify-between gap-4 px-6 py-5 text-left font-semibold transition-all",
-                      "text-base xs:text-lg text-gray-900 group-hover:text-primary",
+                      "text-base xs:text-lg text-foreground group-hover:text-primary",
                       "[&[data-state=open]]:text-primary [&[data-state=open]]:bg-gradient-to-r [&[data-state=open]]:from-primary/5 [&[data-state=open]]:to-secondary/5"
                     )}
                   >
@@ -150,7 +150,7 @@ const FAQ = () => {
                   </AccordionPrimitive.Trigger>
                 </AccordionPrimitive.Header>
                 <AccordionContent className="px-6 pb-6 pt-0">
-                  <div className="pt-2 pb-2 text-[15px] xs:text-base leading-relaxed text-gray-700">
+                  <div className="pt-2 pb-2 text-[15px] xs:text-base leading-relaxed text-muted-foreground">
                     {answer}
                   </div>
                 </AccordionContent>
