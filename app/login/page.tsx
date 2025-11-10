@@ -22,9 +22,7 @@ export default function LoginPage() {
       y: 0,
       transition: {
         duration: 0.6 * animationSpeed,
-        ease: "easeOut",
-        when: "beforeChildren",
-        staggerChildren: 0.1 * animationSpeed,
+        ease: [0, 0, 0.58, 1] as const,
       },
     },
   };
@@ -34,7 +32,7 @@ export default function LoginPage() {
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.5 * animationSpeed, ease: "easeOut" },
+      transition: { duration: 0.5 * animationSpeed, ease: [0.42, 0, 0.58, 1] as const },
     },
   };
 
@@ -45,7 +43,7 @@ export default function LoginPage() {
       opacity: 1,
       transition: {
         duration: 0.7 * animationSpeed,
-        ease: "easeOut",
+        ease: [0.42, 0, 0.58, 1] as const,
       },
     },
   };
@@ -55,7 +53,7 @@ export default function LoginPage() {
     rest: { scale: 1 },
     hover: {
       scale: 1.03,
-      transition: { duration: 0.2 * animationSpeed, ease: "easeInOut" },
+      transition: { duration: 0.2 * animationSpeed, ease: [0.42, 0, 0.58, 1] as const },
     },
     tap: { scale: 0.98 },
   };
@@ -64,7 +62,7 @@ export default function LoginPage() {
     rest: { boxShadow: "0 0 0 rgba(0, 0, 0, 0)" },
     hover: {
       boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
-      transition: { duration: 0.3 * animationSpeed, ease: "easeInOut" },
+      transition: { duration: 0.3 * animationSpeed, ease: [0.42, 0, 0.58, 1] as const },
     },
   };
 
@@ -77,6 +75,10 @@ export default function LoginPage() {
         animate="visible"
         layoutId="authCard"
         layout
+        transition={{
+          staggerChildren: 0.1 * animationSpeed,
+          when: "beforeChildren",
+        }}
       >
         {/* Left side with blob design */}
         <div className="relative w-2/5 bg-black -300 p-8 flex flex-col justify-center overflow-hidden">

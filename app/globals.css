@@ -1,47 +1,135 @@
+/* --- Tailwind Core & Plugins --- */
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --primary: #6366f1;
-  --primary-light: #818cf8;
-  --secondary: #ec4899;
-  --secondary-light: #f472b6;
-  --accent: #06b6d4;
-  --accent-light: #22d3ee;
-  --gradient-start: #6366f1;
-  --gradient-end: #ec4899;
-}
+/* --- Custom Variants & Themes --- */
+@custom-variant dark (&:is(.dark *));
 
-/* Custom theme variables */
-:root {
+/* --- Theme Configuration for Tailwind v4 --- */
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  
+  --radius-lg: var(--radius-lg);
+  --radius-md: var(--radius-md);
+  --radius-sm: var(--radius-sm);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --primary: #818cf8;
-    --primary-light: #a5b4fc;
-    --secondary: #f472b6;
-    --secondary-light: #f9a8d4;
-    --accent: #22d3ee;
-    --accent-light: #67e8f9;
-    --gradient-start: #818cf8;
-    --gradient-end: #f472b6;
+/* --- Base Theme Variables (Light Mode) --- */
+:root {
+  /* Tailwind theme colors */
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #6366f1;
+  --primary-foreground: #f9fafb;
+  --secondary: #ec4899;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #06b6d4;
+  --accent-foreground: #0a0a0a;
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #171717;
+
+  /* Gradient theme variables */
+  --gradient-start: #6366f1;
+  --gradient-end: #ec4899;
+
+  /* Chart colors */
+  --chart-1: hsl(12 76% 61%);
+  --chart-2: hsl(173 58% 39%);
+  --chart-3: hsl(197 37% 24%);
+  --chart-4: hsl(43 74% 66%);
+  --chart-5: hsl(27 87% 67%);
+
+  /* Radius and Animations */
+  --radius: 0.5rem;
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  /* Breakpoints */
+  --breakpoint-xs: 375px;
+}
+
+/* --- Dark Mode Variables --- */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card: #0a0a0a;
+  --card-foreground: #ededed;
+  --popover: #0a0a0a;
+  --popover-foreground: #ededed;
+  --primary: #818cf8;
+  --primary-foreground: #0a0a0a;
+  --secondary: #f472b6;
+  --secondary-foreground: #0a0a0a;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  --accent: #22d3ee;
+  --accent-foreground: #0a0a0a;
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: #ededed;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #a1a1aa;
+  --gradient-start: #818cf8;
+  --gradient-end: #f472b6;
+
+  /* Chart colors (dark mode) */
+  --chart-1: hsl(220 70% 50%);
+  --chart-2: hsl(160 60% 45%);
+  --chart-3: hsl(30 80% 55%);
+  --chart-4: hsl(280 65% 60%);
+  --chart-5: hsl(340 75% 55%);
+}
+
+/* --- Accordion Animations --- */
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
 }
 
+/* --- Gradient Animation --- */
 @keyframes gradient {
   0% {
     background-position: 0% 50%;
@@ -51,5 +139,32 @@ body {
   }
   100% {
     background-position: 0% 50%;
+  }
+}
+
+/* --- Base Layer (Tailwind reset and defaults) --- */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+    outline-color: hsl(var(--ring) / 0.5);
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans, Arial, Helvetica, sans-serif);
+  }
+
+  button {
+    @apply cursor-pointer;
   }
 }

@@ -1,7 +1,19 @@
-"use client";
+import FAQ from "@/components/faq";
+import Features from "@/components/features";
+import Footer from "@/components/footer";
+import Hero from "@/components/hero";
+import HowItWorks from "@/components/how-it-works";
+import { Navbar } from "@/components/navbar";
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-8 pb-20 bg-background text-foreground font-[family-name:var(--font-geist-sans)]"></div>
+    <>
+      <Navbar />
+      <Hero />
+      <Features />
+      <FAQ />
+      <HowItWorks />
+      <Footer />
+    </>
   );
 }
