@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ interface UploadedFile {
 export default function ImageUpload() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes";
@@ -144,18 +145,23 @@ export default function ImageUpload() {
                 Drag and drop files here
               </h3>
               <p className="text-muted-foreground mb-4">or</p>
-              <label>
+              <div>
                 <input
                   type="file"
                   multiple
                   accept="image/*"
                   onChange={(e) => handleFileSelect(e.target.files)}
                   className="hidden"
+                  ref={fileInputRef}
                 />
-                <Button as="span" variant="default">
+                <Button
+                  type="button"
+                  variant="default"
+                  onClick={() => fileInputRef.current?.click()}
+                >
                   Browse Files
                 </Button>
-              </label>
+              </div>
               <p className="text-sm text-muted-foreground mt-4">
                 Maximum file size: 50MB per file
               </p>
