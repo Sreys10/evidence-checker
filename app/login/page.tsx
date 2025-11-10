@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [userType, setUserType] = useState("");
@@ -21,6 +23,13 @@ export default function LoginPage() {
     // Simulate API call
     setTimeout(() => {
       setIsLoading(false);
+      // Redirect based on user type
+      if (userType === "admin") {
+        router.push("/admin");
+      } else {
+        // Redirect to dashboard or other pages for other user types
+        router.push("/dashboard");
+      }
     }, 1000);
   };
 

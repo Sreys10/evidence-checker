@@ -27,7 +27,7 @@ export const NavigationSheet = () => {
         <NavMenu orientation="vertical" className="mt-12" />
 
         <div className="mt-8 space-y-4">
-          <Button variant="outline" className="w-full sm:hidden" asChild>
+          <Button variant="outline" className="w-full sm:hidden bg-foreground text-background hover:bg-foreground/90 border-foreground" asChild>
             <Link href="/login">Sign In</Link>
           </Button>
           <Button className="w-full xs:hidden" asChild>

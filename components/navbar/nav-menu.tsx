@@ -12,27 +12,37 @@ export const NavMenu = (props: NavigationMenuProps) => (
     <NavigationMenuList className="gap-6 space-x-0 data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-start">
       <NavigationMenuItem>
         <NavigationMenuLink asChild>
-          <Link href="/">Home</Link>
+          <Link href="/" className="text-foreground/70 hover:text-foreground transition-colors duration-200 font-medium">
+            Home
+          </Link>
         </NavigationMenuLink>
       </NavigationMenuItem>
       <NavigationMenuItem>
         <NavigationMenuLink asChild>
-          <Link href="#features">Features</Link>
+          <Link href="#features" className="text-foreground/70 hover:text-foreground transition-colors duration-200 font-medium">
+            Features
+          </Link>
         </NavigationMenuLink>
       </NavigationMenuItem>
       <NavigationMenuItem>
         <NavigationMenuLink asChild>
-          <Link href="#faq">FAQ</Link>
+          <Link href="#faq" className="text-foreground/70 hover:text-foreground transition-colors duration-200 font-medium">
+            FAQ
+          </Link>
         </NavigationMenuLink>
       </NavigationMenuItem>
       <NavigationMenuItem>
         <NavigationMenuLink asChild>
-          <Link href="#how-it-works">How It Works</Link>
+          <Link href="#how-it-works" className="text-foreground/70 hover:text-foreground transition-colors duration-200 font-medium">
+            How It Works
+          </Link>
         </NavigationMenuLink>
       </NavigationMenuItem>
       <NavigationMenuItem>
         <NavigationMenuLink asChild>
-          <Link href="#tech-stack">Tech Stack</Link>
+          <Link href="#tech-stack" className="text-foreground/70 hover:text-foreground transition-colors duration-200 font-medium">
+            Tech Stack
+          </Link>
         </NavigationMenuLink>
       </NavigationMenuItem>
     </NavigationMenuList>
