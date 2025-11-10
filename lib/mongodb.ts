@@ -10,9 +10,13 @@ const options = {
 };
 
 let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
+let clientPromise: Promise<MongoClient> | null = null;
 
-if (uri) {
+// Only initialize MongoDB connection if URI is provided
+// Skip initialization during build time to avoid errors
+const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build';
+
+if (uri && !isBuildTime) {
   if (process.env.NODE_ENV === 'development') {
     // In development mode, use a global variable so that the value
     // is preserved across module reloads caused by HMR (Hot Module Replacement).
@@ -30,9 +34,6 @@ if (uri) {
     client = new MongoClient(uri, options);
     clientPromise = client.connect();
   }
-} else {
-  // Create a rejected promise if URI is not set
-  clientPromise = Promise.reject(new Error('MongoDB URI is not configured'));
 }
 
 // Export a module-scoped MongoClient promise. By doing this in a
@@ -42,6 +43,9 @@ export default clientPromise;
 export async function getDatabase(): Promise<Db> {
   if (!uri) {
     throw new Error('MongoDB URI is not configured. Please add MONGODB_URI to your environment variables.');
+  }
+  if (!clientPromise) {
+    throw new Error('MongoDB connection not initialized. Please check your environment variables.');
   }
   const client = await clientPromise;
   return client.db(process.env.MONGODB_DB_NAME || 'evi-check');
