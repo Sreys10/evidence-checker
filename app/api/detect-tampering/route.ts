@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 // Backend service URL - set via environment variable
 const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost:5000';
 
+// Log backend URL in development (not in production for security)
+if (process.env.NODE_ENV === 'development') {
+  console.log('Backend Service URL:', BACKEND_SERVICE_URL);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const requestFormData = await request.formData();
@@ -37,18 +42,32 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      const response = await fetch(`${BACKEND_SERVICE_URL}/detect`, {
+      const backendUrl = `${BACKEND_SERVICE_URL}/detect`;
+      console.log('Calling backend at:', backendUrl);
+      
+      const response = await fetch(backendUrl, {
         method: 'POST',
         body: backendFormData as unknown as BodyInit,
         headers: backendFormData.getHeaders(),
       });
 
+      console.log('Backend response status:', response.status);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Backend service error' }));
+        const errorText = await response.text();
+        console.error('Backend error response:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `Backend returned ${response.status}` };
+        }
+        
         return NextResponse.json(
           {
             error: 'Analysis failed',
-            details: errorData.error || `Backend returned ${response.status}`,
+            details: errorData.error || errorData.message || `Backend returned ${response.status}`,
           },
           { status: response.status }
         );
@@ -79,19 +98,28 @@ export async function POST(request: NextRequest) {
       );
     } catch (fetchError) {
       console.error('Backend service request failed:', fetchError);
+      console.error('Error type:', fetchError instanceof Error ? fetchError.constructor.name : typeof fetchError);
+      console.error('Error message:', fetchError instanceof Error ? fetchError.message : String(fetchError));
       
       // Check if backend service is reachable
-      if (fetchError instanceof TypeError && fetchError.message.includes('fetch')) {
+      if (fetchError instanceof TypeError) {
+        const errorMsg = fetchError.message || String(fetchError);
         return NextResponse.json(
           {
             error: 'Backend service unavailable',
-            details: `Cannot connect to backend service at ${BACKEND_SERVICE_URL}. Please ensure the service is running.`,
+            details: `Cannot connect to backend service at ${BACKEND_SERVICE_URL}. Error: ${errorMsg}. Please check if BACKEND_SERVICE_URL is set correctly in Vercel environment variables.`,
           },
           { status: 503 }
         );
       }
 
-      throw fetchError;
+      return NextResponse.json(
+        {
+          error: 'Backend request failed',
+          details: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        },
+        { status: 500 }
+      );
     }
   } catch (error: unknown) {
     console.error('Tampering detection error:', error);
