@@ -5,8 +5,8 @@ const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('image') as File;
+    const requestFormData = await request.formData();
+    const file = requestFormData.get('image') as File;
 
     if (!file) {
       return NextResponse.json(
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
 
     // Create FormData for backend service
     // Note: In Node.js, we need to use a different approach
-    const FormData = (await import('form-data')).default;
-    const formData = new FormData();
-    formData.append('image', buffer, {
+    const FormDataClass = (await import('form-data')).default;
+    const backendFormData = new FormDataClass();
+    backendFormData.append('image', buffer, {
       filename: file.name,
       contentType: file.type,
     });
@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
     try {
       const response = await fetch(`${BACKEND_SERVICE_URL}/detect`, {
         method: 'POST',
-        body: formData as any,
-        headers: formData.getHeaders(),
+        body: backendFormData as any,
+        headers: backendFormData.getHeaders(),
       });
 
       if (!response.ok) {
