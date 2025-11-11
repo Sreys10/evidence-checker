@@ -28,59 +28,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert file to buffer for forwarding
+    // Convert file to buffer for forwarding to backend
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-
-    // Create FormData for backend service
-    // Note: In Node.js, we need to use a different approach
-    const FormDataClass = (await import('form-data')).default;
-    const backendFormData = new FormDataClass();
-    backendFormData.append('image', buffer, {
-      filename: file.name,
-      contentType: file.type,
-    });
 
     try {
       const backendUrl = `${BACKEND_SERVICE_URL}/detect`;
       console.log('Calling backend at:', backendUrl);
+      console.log('File name:', file.name);
+      console.log('File type:', file.type);
+      console.log('File size:', buffer.length);
       
-      const response = await fetch(backendUrl, {
-        method: 'POST',
-        body: backendFormData as unknown as BodyInit,
-        headers: backendFormData.getHeaders(),
+      // Use axios for better form-data handling
+      const axios = (await import('axios')).default;
+      const FormDataClass = (await import('form-data')).default;
+      const FormDataInstance = new FormDataClass();
+      
+      // Append file with proper metadata
+      FormDataInstance.append('image', buffer, {
+        filename: file.name || 'image.jpg',
+        contentType: file.type || 'image/jpeg',
+      });
+      
+      // Use axios to send the request - it handles form-data streams properly
+      const response = await axios.post(backendUrl, FormDataInstance, {
+        headers: {
+          ...FormDataInstance.getHeaders(),
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        timeout: 60000, // 60 second timeout for image processing
       });
 
       console.log('Backend response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Backend error response:', errorText);
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || `Backend returned ${response.status}` };
-        }
-        
-        return NextResponse.json(
-          {
-            error: 'Analysis failed',
-            details: errorData.error || errorData.message || `Backend returned ${response.status}`,
-          },
-          { status: response.status }
-        );
-      }
-
-      const results = await response.json();
+      const results = response.data;
 
       // Check for errors in results
       if (results.status === 'error') {
+        console.error('Backend returned error:', results);
         return NextResponse.json(
           {
             error: 'Analysis failed',
-            details: results.error || results.message,
+            details: results.error || results.message || 'Unknown error from backend',
           },
           { status: 500 }
         );
@@ -96,27 +85,37 @@ export async function POST(request: NextRequest) {
         },
         { status: 200 }
       );
-    } catch (fetchError) {
-      console.error('Backend service request failed:', fetchError);
-      console.error('Error type:', fetchError instanceof Error ? fetchError.constructor.name : typeof fetchError);
-      console.error('Error message:', fetchError instanceof Error ? fetchError.message : String(fetchError));
+    } catch (axiosError: unknown) {
+      console.error('Axios request failed:', axiosError);
       
-      // Check if backend service is reachable
-      if (fetchError instanceof TypeError) {
-        const errorMsg = fetchError.message || String(fetchError);
+      // Handle axios errors - they have response data
+      const axios = (await import('axios')).default;
+      if (axios.isAxiosError(axiosError)) {
+        const status = axiosError.response?.status || 500;
+        const errorData = axiosError.response?.data;
+        const errorMessage = axiosError.message;
+        
+        console.error('Axios error status:', status);
+        console.error('Axios error data:', errorData);
+        console.error('Axios error message:', errorMessage);
+        
+        // Return detailed error information
         return NextResponse.json(
           {
-            error: 'Backend service unavailable',
-            details: `Cannot connect to backend service at ${BACKEND_SERVICE_URL}. Error: ${errorMsg}. Please check if BACKEND_SERVICE_URL is set correctly in Vercel environment variables.`,
+            error: 'Analysis failed',
+            details: errorData?.error || errorData?.message || errorMessage || `Backend returned ${status}`,
+            backendError: errorData,
           },
-          { status: 503 }
+          { status: status }
         );
       }
-
+      
+      // If not an axios error, treat as generic error
+      const errorMessage = axiosError instanceof Error ? axiosError.message : String(axiosError);
       return NextResponse.json(
         {
-          error: 'Backend request failed',
-          details: fetchError instanceof Error ? fetchError.message : String(fetchError),
+          error: 'Failed to send request to backend',
+          details: errorMessage,
         },
         { status: 500 }
       );

@@ -133,7 +133,10 @@ export default function TamperingDetection() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || errorData.details || 'Analysis failed');
+          console.error('API Error:', errorData);
+          // Show detailed error message
+          const errorMessage = errorData.details || errorData.error || 'Analysis failed';
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();
