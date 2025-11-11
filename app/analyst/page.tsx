@@ -38,6 +38,7 @@ import ReportGeneration from "@/components/analyst/report-generation";
 import EvidenceRecords from "@/components/analyst/evidence-records";
 import BlockchainUpload from "@/components/analyst/blockchain-upload";
 import ThemeToggle from "@/components/theme-toggle";
+import { getUserStats } from "@/lib/evidence-storage";
 
 type ActiveTab = "upload" | "detect" | "report" | "records" | "blockchain";
 
@@ -55,6 +56,12 @@ export default function AnalystPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [stats, setStats] = useState({
+    totalEvidence: 0,
+    verified: 0,
+    reportsGenerated: 0,
+    onBlockchain: 0,
+  });
 
   useEffect(() => {
     // Get current user from localStorage
@@ -105,9 +112,31 @@ export default function AnalystPage() {
     
     window.addEventListener('storage', handleStorageChange);
     
+    // Load stats
+    const loadStats = () => {
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        const userStats = getUserStats(user._id || user.email);
+        setStats({
+          totalEvidence: userStats.totalEvidence,
+          verified: userStats.verified,
+          reportsGenerated: userStats.reportsGenerated,
+          onBlockchain: userStats.onBlockchain,
+        });
+      }
+    };
+    
+    loadStats();
+    
+    // Refresh stats periodically
+    const statsInterval = setInterval(() => {
+      loadStats();
+    }, 3000);
+    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
+      clearInterval(statsInterval);
     };
   }, [router, profileImage]);
 
@@ -342,8 +371,10 @@ export default function AnalystPage() {
                 <ImageIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">127</div>
-                <p className="text-xs text-muted-foreground mt-1">+12 this month</p>
+                <div className="text-2xl font-bold text-foreground">{stats.totalEvidence}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.totalEvidence > 0 ? `${stats.verified} verified` : 'No evidence yet'}
+                </p>
               </CardContent>
             </Card>
           </motion.div>
@@ -361,8 +392,12 @@ export default function AnalystPage() {
                 <Shield className="h-4 w-4 text-green-600 dark:text-green-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">98</div>
-                <p className="text-xs text-muted-foreground mt-1">77% success rate</p>
+                <div className="text-2xl font-bold text-foreground">{stats.verified}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.totalEvidence > 0 
+                    ? `${Math.round((stats.verified / stats.totalEvidence) * 100)}% success rate`
+                    : 'No analysis yet'}
+                </p>
               </CardContent>
             </Card>
           </motion.div>
@@ -380,8 +415,8 @@ export default function AnalystPage() {
                 <FileCheck className="h-4 w-4 text-orange-600 dark:text-orange-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">89</div>
-                <p className="text-xs text-muted-foreground mt-1">This month</p>
+                <div className="text-2xl font-bold text-foreground">{stats.reportsGenerated}</div>
+                <p className="text-xs text-muted-foreground mt-1">Total reports</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -399,7 +434,7 @@ export default function AnalystPage() {
                 <LinkIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">76</div>
+                <div className="text-2xl font-bold text-foreground">{stats.onBlockchain}</div>
                 <p className="text-xs text-muted-foreground mt-1">Immutable records</p>
               </CardContent>
             </Card>

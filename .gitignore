@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Backend service (deployed separately)
+/backend-service/
+/model/
+/python-service/
+requirements.txt
+
+# Docker files (not needed for Vercel)
+Dockerfile
+docker-compose.yml
+.dockerignore

@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { getAllEvidence, deleteEvidence, renameEvidence } from "@/lib/evidence-storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Clock,
+  Edit2,
+  X,
+  Check,
 } from "lucide-react";
 
 interface EvidenceRecord {
@@ -34,66 +38,91 @@ interface EvidenceRecord {
   reportGenerated: boolean;
 }
 
-const mockRecords: EvidenceRecord[] = [
-  {
-    id: "1",
-    fileName: "evidence_001.jpg",
-    uploadDate: "2024-01-15 10:30:00",
-    analyzedDate: "2024-01-15 10:35:00",
-    status: "complete",
-    result: "authentic",
-    confidence: 94.5,
-    size: "2.4 MB",
-    type: "image/jpeg",
-    blockchainHash: "0x1234...5678",
-    reportGenerated: true,
-  },
-  {
-    id: "2",
-    fileName: "evidence_002.png",
-    uploadDate: "2024-01-20 14:20:00",
-    analyzedDate: "2024-01-20 14:25:00",
-    status: "complete",
-    result: "tampered",
-    confidence: 87.3,
-    size: "1.8 MB",
-    type: "image/png",
-    blockchainHash: "0xabcd...efgh",
-    reportGenerated: true,
-  },
-  {
-    id: "3",
-    fileName: "evidence_003.tiff",
-    uploadDate: "2024-01-22 09:15:00",
-    analyzedDate: "2024-01-22 09:20:00",
-    status: "complete",
-    result: "authentic",
-    confidence: 98.2,
-    size: "5.2 MB",
-    type: "image/tiff",
-    blockchainHash: null,
-    reportGenerated: false,
-  },
-  {
-    id: "4",
-    fileName: "evidence_004.jpg",
-    uploadDate: "2024-01-23 16:45:00",
-    analyzedDate: "2024-01-23 16:50:00",
-    status: "analyzing",
-    result: null,
-    confidence: null,
-    size: "3.1 MB",
-    type: "image/jpeg",
-    blockchainHash: null,
-    reportGenerated: false,
-  },
-];
-
 export default function EvidenceRecords() {
-  const [records, setRecords] = useState<EvidenceRecord[]>(mockRecords);
+  const [records, setRecords] = useState<EvidenceRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterResult, setFilterResult] = useState<string>("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+
+  useEffect(() => {
+    loadRecords();
+  }, []);
+
+  const loadRecords = () => {
+    const storedEvidence = getAllEvidence();
+    
+    // Convert stored evidence to EvidenceRecord format
+    const evidenceRecords: EvidenceRecord[] = storedEvidence.map((evidence) => {
+      // Check if report was generated for this evidence
+      const savedReports = localStorage.getItem('generatedReports');
+      let reportGenerated = false;
+      if (savedReports) {
+        try {
+          const reports = JSON.parse(savedReports);
+          reportGenerated = reports.some((r: { evidenceName?: string }) => r.evidenceName === evidence.fileName);
+        } catch (e) {
+          console.error('Error parsing reports:', e);
+        }
+      }
+
+      return {
+        id: evidence.id,
+        fileName: evidence.fileName,
+        uploadDate: new Date(evidence.uploadDate).toLocaleString(),
+        analyzedDate: evidence.analyzedDate ? new Date(evidence.analyzedDate).toLocaleString() : "",
+        status: evidence.status,
+        result: evidence.result ?? null,
+        confidence: evidence.confidence ?? null,
+        size: evidence.size,
+        type: evidence.type,
+        blockchainHash: evidence.blockchainHash || null,
+        reportGenerated,
+      };
+    });
+
+    // Sort by upload date (newest first)
+    evidenceRecords.sort((a, b) => {
+      const dateA = new Date(a.uploadDate).getTime();
+      const dateB = new Date(b.uploadDate).getTime();
+      return dateB - dateA;
+    });
+
+    setRecords(evidenceRecords);
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to delete this evidence record?')) {
+      deleteEvidence(id);
+      loadRecords();
+    }
+  };
+
+  const handleRenameStart = (id: string, currentName: string) => {
+    setEditingId(id);
+    setEditValue(currentName);
+  };
+
+  const handleRenameCancel = () => {
+    setEditingId(null);
+    setEditValue("");
+  };
+
+  const handleRenameSave = (id: string) => {
+    if (editValue.trim() && editValue.trim() !== "") {
+      const success = renameEvidence(id, editValue.trim());
+      if (success) {
+        loadRecords();
+        setEditingId(null);
+        setEditValue("");
+      } else {
+        alert('Failed to rename evidence. Please try again.');
+      }
+    } else {
+      alert('Evidence name cannot be empty.');
+    }
+  };
 
   const filteredRecords = records.filter((record) => {
     const matchesSearch = record.fileName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -101,12 +130,6 @@ export default function EvidenceRecords() {
     const matchesResult = filterResult === "all" || record.result === filterResult;
     return matchesSearch && matchesStatus && matchesResult;
   });
-
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this evidence record?")) {
-      setRecords((prev) => prev.filter((r) => r.id !== id));
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -175,7 +198,42 @@ export default function EvidenceRecords() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3">
                         <ImageIcon className="h-5 w-5 text-primary" />
-                        <h3 className="font-semibold text-foreground">{record.fileName}</h3>
+                        {editingId === record.id ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              type="text"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleRenameSave(record.id);
+                                } else if (e.key === 'Escape') {
+                                  handleRenameCancel();
+                                }
+                              }}
+                              className="flex-1 px-2 py-1 bg-background border border-border rounded text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                              autoFocus
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRenameSave(record.id)}
+                              className="h-8 w-8"
+                            >
+                              <Check className="h-4 w-4 text-green-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={handleRenameCancel}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <h3 className="font-semibold text-foreground">{record.fileName}</h3>
+                        )}
                         {record.status === "complete" && record.result && (
                           <>
                             {record.result === "authentic" ? (
@@ -257,20 +315,33 @@ export default function EvidenceRecords() {
                     </div>
 
                     <div className="flex items-center gap-2 ml-4">
-                      <Button variant="outline" size="icon" title="View">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" title="Download">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => handleDelete(record.id)}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {editingId !== record.id && (
+                        <>
+                          <Button variant="outline" size="icon" title="View">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="icon" title="Download">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleRenameStart(record.id, record.fileName)}
+                            title="Rename"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleDelete(record.id)}
+                            title="Delete"
+                            className="hover:bg-destructive hover:text-destructive-foreground"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </CardContent>

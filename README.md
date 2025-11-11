@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Digital Evidence Verification System
+
+A comprehensive digital forensics platform for image authenticity verification and tampering detection.
+
+## Features
+
+- 🔍 **Image Tampering Detection** - Advanced AI-powered analysis
+- 📊 **Detailed Forensic Reports** - Professional digital analysis reports
+- 🔐 **User Authentication** - Secure login and registration
+- 📁 **Evidence Management** - Upload, analyze, and manage digital evidence
+- 📄 **Report Generation** - Generate comprehensive HTML reports
+- 🔗 **Blockchain Integration** - Immutable evidence storage
+
+## Tech Stack
+
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS
+- **Backend:** Next.js API Routes, Node.js
+- **Database:** MongoDB
+- **Image Detection:** Python with AI detection APIs
+- **Authentication:** bcryptjs
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ and npm
+- Python 3.8+ and pip
+- MongoDB (local or MongoDB Atlas)
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone <your-repo-url>
+   cd application/evi-check
+   ```
+
+2. **Install Node.js dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Install Python dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set up environment variables:**
+   Create a `.env.local` file:
+   ```bash
+   MONGODB_URI=your_mongodb_connection_string
+   MONGODB_DB_NAME=evi-check
+   IMAGE_DETECTION_API_USER=your_api_user
+   IMAGE_DETECTION_API_SECRET=your_api_secret
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+   ```
+
+5. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+
+6. **Open [http://localhost:3000](http://localhost:3000)** in your browser
+
+## Deployment
+
+### Quick Deploy Options
+
+1. **Vercel (Recommended)** - See [QUICK_DEPLOY.md](./QUICK_DEPLOY.md)
+2. **Railway** - See [QUICK_DEPLOY.md](./QUICK_DEPLOY.md)
+3. **Docker** - See [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### Detailed Deployment Guide
+
+For comprehensive deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+**Quick Docker Deploy:**
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker-compose up -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Project Structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+evi-check/
+├── app/                    # Next.js app directory
+│   ├── api/               # API routes
+│   ├── analyst/           # Analyst dashboard
+│   └── ...
+├── components/            # React components
+├── lib/                   # Utilities and helpers
+├── model/                 # Python image detection models
+├── public/                # Static assets
+└── python-service/        # Optional Python microservice
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment Variables
 
-## Learn More
+Required environment variables:
 
-To learn more about Next.js, take a look at the following resources:
+- `MONGODB_URI` - MongoDB connection string
+- `MONGODB_DB_NAME` - Database name
+- `IMAGE_DETECTION_API_USER` - Image detection API user
+- `IMAGE_DETECTION_API_SECRET` - Image detection API secret
+- `NEXT_PUBLIC_APP_URL` - Application URL
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Important Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Python Execution
 
-## Deploy on Vercel
+The application uses Python scripts for image detection. In production:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Option 1:** Deploy Python service separately (see `python-service/`)
+- **Option 2:** Use serverless functions (AWS Lambda, etc.)
+- **Option 3:** Use external API directly
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Database Migration
+
+Currently uses `localStorage` for evidence. For production, migrate to:
+- MongoDB for evidence storage
+- Create API routes for CRUD operations
+- Update components to use API instead of localStorage
+
+## Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+
+## License
+
+[Your License Here]
+
+## Support
+
+For deployment issues, see:
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Detailed deployment guide
+- [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) - Quick deployment options

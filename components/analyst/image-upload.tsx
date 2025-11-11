@@ -1,6 +1,7 @@
 "use client";
 import { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
+import { saveEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,18 @@ export default function ImageUpload() {
         };
 
         setUploadedFiles((prev) => [...prev, newFile]);
+
+        // Save evidence to storage
+        const evidenceData: StoredEvidence = {
+          id: fileId,
+          fileName: file.name,
+          imageData: preview,
+          uploadDate: new Date().toISOString(),
+          status: "pending",
+          size: formatFileSize(file.size),
+          type: file.type,
+        };
+        saveEvidence(evidenceData);
 
         // Simulate upload progress
         const interval = setInterval(() => {

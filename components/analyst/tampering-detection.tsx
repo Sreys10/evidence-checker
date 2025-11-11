@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   Loader2,
   Image as ImageIcon,
 } from "lucide-react";
+import { saveEvidence, updateEvidenceAnalysis, getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 
 interface DetectionResult {
   id: string;
@@ -33,65 +34,53 @@ interface DetectionResult {
       compressionAnalysis: number;
       overallScore: number;
     };
+    aiDetection?: {
+      deepfake: number;
+      aiGenerated: number;
+      quality: number;
+      scamProb: number;
+      rawResults?: Record<string, unknown>;
+    };
   } | null;
 }
-
-const mockResults: DetectionResult[] = [
-  {
-    id: "1",
-    fileName: "evidence_001.jpg",
-    imagePreview: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999'%3EEvidence Image%3C/text%3E%3C/svg%3E",
-    status: "complete",
-    result: {
-      isTampered: false,
-      confidence: 94.5,
-      anomalies: [],
-      metadata: {
-        camera: "Canon EOS 5D Mark IV",
-        date: "2024-01-15 14:30:22",
-        location: "New York, USA",
-      },
-      analysis: {
-        pixelAnalysis: 96,
-        metadataAnalysis: 98,
-        compressionAnalysis: 89,
-        overallScore: 94.5,
-      },
-    },
-  },
-  {
-    id: "2",
-    fileName: "evidence_002.png",
-    imagePreview: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999'%3EEvidence Image%3C/text%3E%3C/svg%3E",
-    status: "complete",
-    result: {
-      isTampered: true,
-      confidence: 87.3,
-      anomalies: [
-        "Inconsistent pixel patterns detected",
-        "Metadata mismatch found",
-        "Compression artifacts suggest editing",
-      ],
-      metadata: {
-        camera: "Unknown",
-        software: "Adobe Photoshop 2024",
-        date: "2024-01-20 10:15:00",
-      },
-      analysis: {
-        pixelAnalysis: 72,
-        metadataAnalysis: 45,
-        compressionAnalysis: 65,
-        overallScore: 87.3,
-      },
-    },
-  },
-];
 
 export default function TamperingDetection() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults] = useState<DetectionResult[]>(mockResults);
+  const [results, setResults] = useState<DetectionResult[]>([]);
   const [currentAnalysis, setCurrentAnalysis] = useState<DetectionResult | null>(null);
+
+  // Load evidence from storage on mount
+  useEffect(() => {
+    loadEvidenceFromStorage();
+  }, []);
+
+  const loadEvidenceFromStorage = () => {
+    const storedEvidence = getAllEvidence();
+    const analyzedEvidence = storedEvidence.filter(e => e.status === "complete");
+    
+    const detectionResults: DetectionResult[] = analyzedEvidence.map(evidence => ({
+      id: evidence.id,
+      fileName: evidence.fileName,
+      imagePreview: evidence.imageData,
+      status: "complete" as const,
+      result: evidence.result ? {
+        isTampered: evidence.result === "tampered",
+        confidence: evidence.confidence || 0,
+        anomalies: evidence.anomalies || [],
+        metadata: evidence.metadata || {},
+        analysis: evidence.analysis || {
+          pixelAnalysis: 0,
+          metadataAnalysis: 0,
+          compressionAnalysis: 0,
+          overallScore: 0,
+        },
+        aiDetection: evidence.aiDetection,
+      } : null,
+    }));
+    
+    setResults(detectionResults);
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -100,12 +89,12 @@ export default function TamperingDetection() {
     }
   };
 
-  const startAnalysis = () => {
+  const startAnalysis = async () => {
     if (!selectedFile) return;
 
     setIsAnalyzing(true);
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const preview = e.target?.result as string;
       const newAnalysis: DetectionResult = {
         id: Date.now().toString(),
@@ -118,35 +107,110 @@ export default function TamperingDetection() {
       setCurrentAnalysis(newAnalysis);
       setResults((prev) => [newAnalysis, ...prev]);
 
-      // Simulate analysis
-      setTimeout(() => {
-        const mockResult = {
-          isTampered: Math.random() > 0.5,
-          confidence: 75 + Math.random() * 20,
-          anomalies: Math.random() > 0.5 ? ["Pixel inconsistency detected"] : [],
-          metadata: {
-            camera: "Canon EOS 5D",
-            date: new Date().toISOString(),
-          },
-          analysis: {
-            pixelAnalysis: 80 + Math.random() * 15,
-            metadataAnalysis: 75 + Math.random() * 20,
-            compressionAnalysis: 70 + Math.random() * 25,
-            overallScore: 75 + Math.random() * 20,
-          },
+      try {
+        // First, save the evidence to storage
+        const evidenceId = newAnalysis.id;
+        const evidenceData: StoredEvidence = {
+          id: evidenceId,
+          fileName: selectedFile.name,
+          imageData: preview,
+          uploadDate: new Date().toISOString(),
+          status: "analyzing",
+          size: `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`,
+          type: selectedFile.type,
         };
+        saveEvidence(evidenceData);
 
+        // Create FormData to send the image
+        const formData = new FormData();
+        formData.append('image', selectedFile);
+
+        // Call the API
+        const response = await fetch('/api/detect-tampering', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || errorData.details || 'Analysis failed');
+        }
+
+        const data = await response.json();
+        
+        if (data.success && data.result) {
+          const analysisResult = {
+            isTampered: data.result.isTampered,
+            confidence: data.result.confidence,
+            anomalies: data.result.anomalies || [],
+            metadata: data.result.metadata || {},
+            analysis: data.result.analysis || {
+              pixelAnalysis: 0,
+              metadataAnalysis: 0,
+              compressionAnalysis: 0,
+              overallScore: 0,
+            },
+            aiDetection: data.result.aiDetection, // Store AI detection results
+          };
+
+          // Update evidence in storage with analysis results
+          updateEvidenceAnalysis(evidenceId, {
+            isTampered: data.result.isTampered,
+            confidence: data.result.confidence,
+            anomalies: data.result.anomalies || [],
+            analysis: data.result.analysis || {
+              pixelAnalysis: 0,
+              metadataAnalysis: 0,
+              compressionAnalysis: 0,
+              overallScore: 0,
+            },
+            metadata: data.result.metadata,
+            aiDetection: data.result.aiDetection,
+          });
+
+          setCurrentAnalysis(null);
+          setResults((prev) =>
+            prev.map((r) =>
+              r.id === newAnalysis.id
+                ? { ...r, status: "complete", result: analysisResult }
+                : r
+            )
+          );
+        } else {
+          throw new Error('Invalid response from server');
+        }
+      } catch (error) {
+        console.error('Analysis error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
+        
+        // Update with error state
         setCurrentAnalysis(null);
         setResults((prev) =>
           prev.map((r) =>
             r.id === newAnalysis.id
-              ? { ...r, status: "complete", result: mockResult }
+              ? {
+                  ...r,
+                  status: "complete",
+                  result: {
+                    isTampered: false,
+                    confidence: 0,
+                    anomalies: [`Error: ${errorMessage}`],
+                    metadata: {},
+                    analysis: {
+                      pixelAnalysis: 0,
+                      metadataAnalysis: 0,
+                      compressionAnalysis: 0,
+                      overallScore: 0,
+                    },
+                  },
+                }
               : r
           )
         );
+      } finally {
         setIsAnalyzing(false);
         setSelectedFile(null);
-      }, 3000);
+      }
     };
     reader.readAsDataURL(selectedFile);
   };
@@ -378,6 +442,79 @@ export default function TamperingDetection() {
                         )}
                       </div>
                     </div>
+
+                    {/* AI Detection Results */}
+                    {result.result.aiDetection && (
+                      <div className="pt-4 border-t border-border">
+                        <p className="text-sm font-medium text-foreground mb-3">AI Detection Results:</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-muted/50 p-3 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Deepfake Probability</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <motion.div
+                                  className={`h-full ${result.result.aiDetection.deepfake > 0.5 ? 'bg-red-500' : 'bg-green-500'}`}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${result.result.aiDetection.deepfake * 100}%` }}
+                                  transition={{ duration: 1, delay: 0.8 }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">
+                                {(result.result.aiDetection.deepfake * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="bg-muted/50 p-3 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">AI-Generated Content</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <motion.div
+                                  className={`h-full ${result.result.aiDetection.aiGenerated > 0.5 ? 'bg-red-500' : 'bg-green-500'}`}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${result.result.aiDetection.aiGenerated * 100}%` }}
+                                  transition={{ duration: 1, delay: 1 }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">
+                                {(result.result.aiDetection.aiGenerated * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="bg-muted/50 p-3 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Image Quality</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <motion.div
+                                  className={`h-full ${result.result.aiDetection.quality > 0.7 ? 'bg-green-500' : result.result.aiDetection.quality > 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${result.result.aiDetection.quality * 100}%` }}
+                                  transition={{ duration: 1, delay: 1.2 }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">
+                                {(result.result.aiDetection.quality * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="bg-muted/50 p-3 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Scammer Detection</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <motion.div
+                                  className={`h-full ${result.result.aiDetection.scamProb > 0.5 ? 'bg-red-500' : 'bg-green-500'}`}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${result.result.aiDetection.scamProb * 100}%` }}
+                                  transition={{ duration: 1, delay: 1.4 }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">
+                                {(result.result.aiDetection.scamProb * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

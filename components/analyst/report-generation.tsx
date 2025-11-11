@@ -18,6 +18,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { downloadReport, type ReportData } from "@/lib/report-generator";
+import { getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 
 interface Report {
   id: string;
@@ -41,89 +42,18 @@ interface Report {
     software?: string;
   };
   anomalies?: string[];
+  aiDetection?: {
+    deepfake: number;
+    aiGenerated: number;
+    quality: number;
+    scamProb: number;
+  };
+  generatedBy?: {
+    name: string;
+    email: string;
+  };
   sentToAdmin?: boolean;
 }
-
-const mockEvidenceData: Record<string, {
-  imageData: string;
-  analysis: {
-    pixelAnalysis: number;
-    metadataAnalysis: number;
-    compressionAnalysis: number;
-    overallScore: number;
-  };
-  metadata: {
-    camera?: string;
-    date?: string;
-    location?: string;
-    software?: string;
-  };
-  anomalies?: string[];
-}> = {
-  "evidence_001.jpg": {
-    imageData: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23e5e7eb' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%236b7280' font-size='24'%3EEvidence Image 001%3C/text%3E%3C/svg%3E",
-    analysis: {
-      pixelAnalysis: 96,
-      metadataAnalysis: 98,
-      compressionAnalysis: 89,
-      overallScore: 94.5,
-    },
-    metadata: {
-      camera: "Canon EOS 5D Mark IV",
-      date: "2024-01-15 14:30:22",
-      location: "New York, USA",
-    },
-    anomalies: [],
-  },
-  "evidence_002.png": {
-    imageData: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23fee2e2' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23dc2626' font-size='24'%3EEvidence Image 002%3C/text%3E%3C/svg%3E",
-    analysis: {
-      pixelAnalysis: 72,
-      metadataAnalysis: 45,
-      compressionAnalysis: 65,
-      overallScore: 87.3,
-    },
-    metadata: {
-      camera: "Unknown",
-      software: "Adobe Photoshop 2024",
-      date: "2024-01-20 10:15:00",
-    },
-    anomalies: [
-      "Inconsistent pixel patterns detected",
-      "Metadata mismatch found",
-      "Compression artifacts suggest editing",
-    ],
-  },
-  "evidence_003.jpg": {
-    imageData: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23dbeafe' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%232563eb' font-size='24'%3EEvidence Image 003%3C/text%3E%3C/svg%3E",
-    analysis: {
-      pixelAnalysis: 99,
-      metadataAnalysis: 97,
-      compressionAnalysis: 98,
-      overallScore: 98.2,
-    },
-    metadata: {
-      camera: "Nikon D850",
-      date: "2024-01-22 09:45:10",
-      location: "Los Angeles, USA",
-    },
-    anomalies: [],
-  },
-  "evidence_004.tiff": {
-    imageData: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23f3f4f6' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%234b5563' font-size='24'%3EEvidence Image 004%3C/text%3E%3C/svg%3E",
-    analysis: {
-      pixelAnalysis: 88,
-      metadataAnalysis: 92,
-      compressionAnalysis: 85,
-      overallScore: 88.3,
-    },
-    metadata: {
-      camera: "Sony A7R IV",
-      date: "2024-01-25 16:20:33",
-    },
-    anomalies: [],
-  },
-};
 
 export default function ReportGeneration() {
   const [selectedEvidence, setSelectedEvidence] = useState<string>("");
@@ -132,6 +62,14 @@ export default function ReportGeneration() {
   const [isSending, setIsSending] = useState<string | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
+  const [availableEvidence, setAvailableEvidence] = useState<StoredEvidence[]>([]);
+
+  const loadAvailableEvidence = () => {
+    const evidence = getAllEvidence();
+    // Only show evidence that has been analyzed (status: complete)
+    const analyzedEvidence = evidence.filter(e => e.status === "complete");
+    setAvailableEvidence(analyzedEvidence);
+  };
 
   useEffect(() => {
     // Load user from localStorage
@@ -141,38 +79,106 @@ export default function ReportGeneration() {
       setCurrentUser({ name: user.name, email: user.email });
     }
 
-    // Load saved reports from localStorage
+    // Load saved reports from localStorage (filtered by current user)
     const savedReports = localStorage.getItem('generatedReports');
     if (savedReports) {
-      setReports(JSON.parse(savedReports));
+      try {
+        const allReports = JSON.parse(savedReports);
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          // Filter reports by current user
+          const userReports = allReports.filter((r: Report) => {
+            return r.generatedBy?.email === user.email;
+          });
+          setReports(userReports);
+        } else {
+          setReports([]);
+        }
+      } catch (error) {
+        console.error('Error loading reports:', error);
+        setReports([]);
+      }
     }
+
+    // Load available evidence from storage
+    loadAvailableEvidence();
+
+    // Listen for storage changes to refresh evidence list
+    const handleStorageChange = () => {
+      loadAvailableEvidence();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also check periodically for changes (for same-window updates)
+    const interval = setInterval(() => {
+      loadAvailableEvidence();
+    }, 2000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const saveReports = (newReports: Report[]) => {
     setReports(newReports);
-    localStorage.setItem('generatedReports', JSON.stringify(newReports));
+    
+    // Get all existing reports from localStorage
+    const savedReports = localStorage.getItem('generatedReports');
+    let allReports: Report[] = [];
+    
+    if (savedReports) {
+      try {
+        allReports = JSON.parse(savedReports);
+      } catch {
+        allReports = [];
+      }
+    }
+    
+    // Get current user email
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        // Remove old reports from this user
+        allReports = allReports.filter((r: Report) => r.generatedBy?.email !== user.email);
+        // Add new reports from this user
+        allReports = [...allReports, ...newReports];
+        // Save all reports back
+        localStorage.setItem('generatedReports', JSON.stringify(allReports));
+      } catch {
+        // If error, just save the new reports
+        localStorage.setItem('generatedReports', JSON.stringify(newReports));
+      }
+    } else {
+      localStorage.setItem('generatedReports', JSON.stringify(newReports));
+    }
   };
 
   const handleGenerateReport = () => {
     if (!selectedEvidence || !currentUser) return;
 
     setIsGenerating(true);
-    const evidenceData = mockEvidenceData[selectedEvidence];
     
-    if (!evidenceData) {
+    // Find the selected evidence from storage
+    const evidenceData = availableEvidence.find(e => e.id === selectedEvidence);
+    
+    if (!evidenceData || !evidenceData.result) {
       setIsGenerating(false);
       return;
     }
 
-    // Simulate report generation
+    // Generate report
     setTimeout(() => {
-      const status: "authentic" | "tampered" = evidenceData.anomalies && evidenceData.anomalies.length > 0 ? "tampered" : "authentic";
-      const confidence = evidenceData.analysis.overallScore;
+      const status: "authentic" | "tampered" = evidenceData.result === "tampered" ? "tampered" : "authentic";
+      const confidence = evidenceData.confidence || 0;
 
       const newReport: Report = {
         id: Date.now().toString(),
-        fileName: `report_${selectedEvidence.replace(/\.[^/.]+$/, "")}_${new Date().toISOString().split("T")[0]}.${reportFormat.toLowerCase()}`,
-        evidenceName: selectedEvidence,
+        fileName: `report_${evidenceData.fileName.replace(/\.[^/.]+$/, "")}_${new Date().toISOString().split("T")[0]}.${reportFormat.toLowerCase()}`,
+        evidenceName: evidenceData.fileName,
         generatedDate: new Date().toISOString(),
         status,
         confidence,
@@ -181,6 +187,11 @@ export default function ReportGeneration() {
         analysis: evidenceData.analysis,
         metadata: evidenceData.metadata,
         anomalies: evidenceData.anomalies,
+        aiDetection: evidenceData.aiDetection,
+        generatedBy: {
+          name: currentUser.name,
+          email: currentUser.email,
+        },
         sentToAdmin: false,
       };
 
@@ -210,6 +221,7 @@ export default function ReportGeneration() {
       analysis: report.analysis,
       metadata: report.metadata,
       anomalies: report.anomalies,
+      aiDetection: report.aiDetection,
     };
 
     downloadReport(reportData, report.format === "PDF" ? "PDF" : "HTML");
@@ -234,6 +246,7 @@ export default function ReportGeneration() {
       analysis: report.analysis,
       metadata: report.metadata,
       anomalies: report.anomalies,
+      aiDetection: report.aiDetection,
     };
 
     downloadReport(reportData, "PDF");
@@ -335,11 +348,15 @@ export default function ReportGeneration() {
                 className="w-full px-4 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Choose evidence file...</option>
-                {Object.keys(mockEvidenceData).map((evidence) => (
-                  <option key={evidence} value={evidence}>
-                    {evidence}
-                  </option>
-                ))}
+                {availableEvidence.length === 0 ? (
+                  <option value="" disabled>No analyzed evidence available. Please analyze evidence first.</option>
+                ) : (
+                  availableEvidence.map((evidence) => (
+                    <option key={evidence.id} value={evidence.id}>
+                      {evidence.fileName} - {evidence.result === "tampered" ? "Tampered" : "Authentic"} ({evidence.confidence?.toFixed(1)}%)
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
