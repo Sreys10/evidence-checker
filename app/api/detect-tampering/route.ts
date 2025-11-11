@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     try {
       const response = await fetch(`${BACKEND_SERVICE_URL}/detect`, {
         method: 'POST',
-        body: backendFormData as any,
+        body: backendFormData as unknown as BodyInit,
         headers: backendFormData.getHeaders(),
       });
 
@@ -161,7 +161,7 @@ function transformDetectionResults(results: DetectionResults) {
   }
 
   // Extract metadata if available
-  const metadata: any = {};
+  const metadata: Record<string, unknown> = {};
   if (results.quality?.media?.type) {
     metadata.format = results.quality.media.type;
   }
