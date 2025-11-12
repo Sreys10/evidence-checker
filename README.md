@@ -66,13 +66,9 @@ A comprehensive digital forensics platform for image authenticity verification a
 
 ### Quick Deploy Options
 
-1. **Vercel (Recommended)** - See [QUICK_DEPLOY.md](./QUICK_DEPLOY.md)
-2. **Railway** - See [QUICK_DEPLOY.md](./QUICK_DEPLOY.md)
-3. **Docker** - See [DEPLOYMENT.md](./DEPLOYMENT.md)
-
-### Detailed Deployment Guide
-
-For comprehensive deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
+1. **Vercel (Recommended)** - Deploy directly from GitHub
+2. **Railway** - Connect your repository and deploy
+3. **Docker** - Use the provided Dockerfile
 
 **Quick Docker Deploy:**
 ```bash
@@ -134,6 +130,4 @@ Currently uses `localStorage` for evidence. For production, migrate to:
 
 ## Support
 
-For deployment issues, see:
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Detailed deployment guide
-- [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) - Quick deployment options
+For deployment and setup assistance, refer to the installation and deployment sections above.
