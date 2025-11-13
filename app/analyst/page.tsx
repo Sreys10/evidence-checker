@@ -37,10 +37,11 @@ import TamperingDetection from "@/components/analyst/tampering-detection";
 import ReportGeneration from "@/components/analyst/report-generation";
 import EvidenceRecords from "@/components/analyst/evidence-records";
 import BlockchainUpload from "@/components/analyst/blockchain-upload";
+import FaceDetection from "@/components/analyst/face-detection";
 import ThemeToggle from "@/components/theme-toggle";
 import { getUserStats } from "@/lib/evidence-storage";
 
-type ActiveTab = "upload" | "detect" | "report" | "records" | "blockchain";
+type ActiveTab = "upload" | "detect" | "face" | "report" | "records" | "blockchain";
 
 interface User {
   _id?: string;
@@ -154,6 +155,7 @@ export default function AnalystPage() {
   const tabs = [
     { id: "upload" as ActiveTab, label: "Upload Evidence", icon: Upload },
     { id: "detect" as ActiveTab, label: "Detect Tampering", icon: Search },
+    { id: "face" as ActiveTab, label: "Face Detection", icon: Camera },
     { id: "report" as ActiveTab, label: "Generate Report", icon: FileText },
     { id: "records" as ActiveTab, label: "Evidence Records", icon: History },
     { id: "blockchain" as ActiveTab, label: "Blockchain Upload", icon: Database },
@@ -472,6 +474,7 @@ export default function AnalystPage() {
         >
           {activeTab === "upload" && <ImageUpload />}
           {activeTab === "detect" && <TamperingDetection />}
+          {activeTab === "face" && <FaceDetection />}
           {activeTab === "report" && <ReportGeneration />}
           {activeTab === "records" && <EvidenceRecords />}
           {activeTab === "blockchain" && <BlockchainUpload />}
