@@ -23,6 +23,7 @@ export async function connectWallet() {
     }
 
     try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const provider = new ethers.BrowserProvider(window.ethereum as any);
         const accounts = await provider.send("eth_requestAccounts", []);
         return accounts[0];
@@ -43,6 +44,7 @@ export async function registerEvidenceOnBlockchain(
     }
 
     try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const provider = new ethers.BrowserProvider(window.ethereum as any);
         const signer = await provider.getSigner();
 

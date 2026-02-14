@@ -81,6 +81,7 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
 
             alert(`Evidence preserved on blockchain!\nTransaction Hash: ${tx.hash}`);
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error("Preservation Error:", error);
             alert("Preservation failed: " + (error.message || error));

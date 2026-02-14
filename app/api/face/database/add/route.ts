@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       // Cast to unknown first to avoid ESLint 'unexpected any' error, then checks
       const bytes = await (file as unknown as Blob).arrayBuffer();
       buffer = Buffer.from(bytes);
-    } catch (e) {
+    } catch (_e) {
       return NextResponse.json(
         { error: 'Failed to read file buffer', success: false },
         { status: 400 }
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response.data, { status: 200 });
     } catch (backendError: unknown) {
       // Cast to any for axios error handling pattern or define a proper type
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = backendError as any;
       console.error('Backend service error:', error);
 
