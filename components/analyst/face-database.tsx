@@ -47,7 +47,7 @@ export default function FaceDatabase() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     person_name: "",

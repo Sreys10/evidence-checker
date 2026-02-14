@@ -583,7 +583,7 @@ export const generateHTMLReport = (data: ReportData): string => {
             The following anomalies and inconsistencies were identified during the forensic examination:
           </p>
           <ul>
-            ${data.anomalies.map(anomaly => `<li><strong>Finding:</strong> ${anomaly}</li>`).join('')}
+            ${data.anomalies.map((anomaly, _idx) => `<li><strong>Finding:</strong> ${anomaly}</li>`).join('')}
           </ul>
           <p style="margin-top: 20px; padding: 15px; background: white; border-radius: 6px; color: #7f1d1d; font-size: 14px; line-height: 1.7;">
             <strong>Risk Assessment:</strong> The presence of ${data.anomalies.length} ${data.anomalies.length === 1 ? 'anomaly' : 'anomalies'} 

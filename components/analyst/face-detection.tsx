@@ -162,7 +162,7 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
         // Check if evidence already exists for this image
         const { getAllEvidence } = await import('@/lib/evidence-storage');
         const allEvidence = getAllEvidence(userId);
-        let evidence = allEvidence.find((e: StoredEvidence) => e.fileName === selectedFile.name);
+        const evidence = allEvidence.find((e: StoredEvidence) => e.fileName === selectedFile.name);
 
         if (!evidence) {
           // Create new evidence entry

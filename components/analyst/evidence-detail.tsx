@@ -26,6 +26,10 @@ import TamperingDetection from "./tampering-detection";
 import MetadataAnalysis from "./metadata-analysis";
 import FaceAnalysis from "./face-analysis";
 import { motion } from "framer-motion";
+import { uploadToIPFS } from "@/lib/ipfs-service";
+import { connectWallet, registerEvidenceOnBlockchain } from "@/lib/web3-service";
+import { saveEvidence } from "@/lib/evidence-storage";
+import { Loader2, ShieldCheck, Link as LinkIcon } from "lucide-react";
 
 interface EvidenceDetailProps {
     evidenceId: string;
@@ -36,6 +40,54 @@ interface EvidenceDetailProps {
 export default function EvidenceDetail({ evidenceId, onBack, onAction }: EvidenceDetailProps) {
     const [evidence, setEvidence] = useState<StoredEvidence | null>(null);
     const [zoom, setZoom] = useState(1);
+    const [isPreserving, setIsPreserving] = useState(false);
+
+    // Helper to convert base64 to File
+    const dataURLtoFile = async (dataUrl: string, filename: string): Promise<File> => {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        return new File([blob], filename, { type: blob.type });
+    };
+
+    const handlePreserve = async () => {
+        if (!evidence) return;
+        setIsPreserving(true);
+        try {
+            // 1. Connect Wallet
+            const account = await connectWallet();
+            if (!account) throw new Error("Wallet connection failed or rejected");
+
+            // 2. Upload to IPFS
+            const file = await dataURLtoFile(evidence.imageData, evidence.fileName);
+            // In a real app, you might want to show upload progress here
+            const ipfsHash = await uploadToIPFS(file);
+
+            // 3. Register on Chain
+            const tx = await registerEvidenceOnBlockchain(
+                ipfsHash,
+                evidence.fileName,
+                evidence.type,
+                evidence.id
+            );
+
+            // 4. Save
+            const updatedEvidence = {
+                ...evidence,
+                ipfsHash,
+                blockchainHash: tx.hash
+            };
+            setEvidence(updatedEvidence);
+            saveEvidence(updatedEvidence); // persist
+
+            alert(`Evidence preserved on blockchain!\nTransaction Hash: ${tx.hash}`);
+
+        } catch (error: any) {
+            console.error("Preservation Error:", error);
+            alert("Preservation failed: " + (error.message || error));
+        } finally {
+            setIsPreserving(false);
+        }
+    };
 
     useEffect(() => {
         const all = getAllEvidence();
@@ -93,6 +145,16 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
                     <Button size="sm" onClick={() => onAction('report', evidence.id)} className="h-8 gap-2 ml-2">
                         <FileText className="h-3.5 w-3.5" />
                         Generate Report
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handlePreserve}
+                        disabled={isPreserving || !!evidence.blockchainHash}
+                        className={`h-8 gap-2 ml-2 ${evidence.blockchainHash ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100" : ""}`}
+                    >
+                        {isPreserving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                        {evidence.blockchainHash ? "Preserved On-Chain" : "Preserve"}
                     </Button>
                 </div>
             </header>
@@ -162,6 +224,30 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
                                             </div>
                                         </div>
                                     </div>
+
+                                    {evidence.blockchainHash && (
+                                        <div className="p-4 rounded-lg bg-green-50/50 dark:bg-green-900/10 border border-green-100 dark:border-green-800 space-y-2">
+                                            <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-semibold mb-1">
+                                                <ShieldCheck className="h-4 w-4" /> Blockchain Verified
+                                            </div>
+                                            <div className="text-xs text-muted-foreground break-all">
+                                                <span className="font-medium text-foreground">Tx:</span> {evidence.blockchainHash}
+                                            </div>
+                                            {evidence.ipfsHash && (
+                                                <div className="text-xs text-muted-foreground break-all">
+                                                    <span className="font-medium text-foreground">IPFS:</span> {evidence.ipfsHash}
+                                                </div>
+                                            )}
+                                            <a
+                                                href={`https://sepolia.etherscan.io/tx/${evidence.blockchainHash}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-xs text-primary flex items-center gap-1 hover:underline mt-1"
+                                            >
+                                                View on Explorer <LinkIcon className="h-3 w-3" />
+                                            </a>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-4">
                                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Current Analysis Status</h3>

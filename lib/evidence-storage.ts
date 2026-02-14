@@ -39,6 +39,7 @@ export interface StoredEvidence {
     scamProb: number;
   };
   blockchainHash?: string | null;
+  ipfsHash?: string | null;
   reportGenerated?: boolean;
   faceDetection?: {
     faces_detected: number;
@@ -317,7 +318,7 @@ export function getUserStats(userId?: string): {
     const savedReports = localStorage.getItem('generatedReports');
     if (savedReports) {
       const reports = JSON.parse(savedReports);
-      const currentUserId = userId || getCurrentUserId();
+      const _currentUserId = userId || getCurrentUserId();
       reportsGenerated = reports.filter((r: { generatedBy?: { email?: string } }) => {
         try {
           const userStr = localStorage.getItem('user');

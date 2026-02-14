@@ -169,6 +169,8 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold">{stat.value}</div>
+                                <p className="text-sm text-foreground mb-1">"User uploading heavy 4k images"</p>
+                                <p className="text-xs text-muted-foreground">Server load increased by 15%</p>
                                 <p className="text-xs text-muted-foreground mt-1 flex items-center">
                                     <TrendingUp className="h-3 w-3 mr-1 text-emerald-500" />
                                     {stat.change}
@@ -190,7 +192,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-8">
-                            {recentActivity.map((activity) => (
+                            {recentActivity.map((activity, _index) => (
                                 <div key={activity.id} className="flex items-center">
                                     <div className={`p-2 rounded-full mr-4 ${activity.bg}`}>
                                         <activity.icon className={`h-4 w-4 ${activity.color}`} />
