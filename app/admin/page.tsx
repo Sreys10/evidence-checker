@@ -5,19 +5,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { 
+import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { 
-  Users, 
-  UserCheck, 
-  Clock, 
-  Shield, 
-  Settings, 
+import {
+  Users,
+  UserCheck,
+  Clock,
+  Shield,
+  Settings,
   LogOut,
   Search,
   MoreVertical,
@@ -80,12 +80,6 @@ interface Notification {
     };
     status: "authentic" | "tampered";
     confidence: number;
-    analysis?: {
-      pixelAnalysis: number;
-      metadataAnalysis: number;
-      compressionAnalysis: number;
-      overallScore: number;
-    };
     metadata?: {
       camera?: string;
       date?: string;
@@ -104,7 +98,7 @@ const getTimeAgo = (date: string | Date | undefined): string => {
   const now = new Date();
   const loginDate = new Date(date);
   const diffInSeconds = Math.floor((now.getTime() - loginDate.getTime()) / 1000);
-  
+
   if (diffInSeconds < 60) return "Just now";
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
@@ -162,13 +156,13 @@ export default function AdminPage() {
     if (userStr) {
       const user = JSON.parse(userStr);
       setCurrentUser(user);
-      
+
       // Load profile image if exists
       const savedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
       if (savedImage) {
         setProfileImage(savedImage);
       }
-      
+
       // Redirect if not admin
       if (user.userType !== 'admin') {
         router.push('/login');
@@ -181,10 +175,10 @@ export default function AdminPage() {
 
     // Fetch all users
     fetchUsers();
-    
+
     // Load notifications
     loadNotifications();
-    
+
     // Listen for new notifications
     const handleNotificationStorageChange = (e: StorageEvent) => {
       if (e.key === 'adminNotifications') {
@@ -192,12 +186,12 @@ export default function AdminPage() {
       }
     };
     window.addEventListener('storage', handleNotificationStorageChange);
-    
+
     // Also check for changes in the same window
     const notificationInterval = setInterval(() => {
       loadNotifications();
     }, 1000);
-    
+
     // Listen for profile image updates
     const handleImageStorageChange = () => {
       const userStr = localStorage.getItem('user');
@@ -209,7 +203,7 @@ export default function AdminPage() {
         }
       }
     };
-    
+
     // Also check for changes in the same window
     const interval = setInterval(() => {
       const userStr = localStorage.getItem('user');
@@ -221,9 +215,9 @@ export default function AdminPage() {
         }
       }
     }, 500);
-    
+
     window.addEventListener('storage', handleImageStorageChange);
-    
+
     return () => {
       window.removeEventListener('storage', handleNotificationStorageChange);
       window.removeEventListener('storage', handleImageStorageChange);
@@ -337,10 +331,10 @@ export default function AdminPage() {
               >
                 <Menu className="h-5 w-5" />
               </Button>
-            <div>
+              <div>
                 <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
                   {currentUser ? `Hi ${getFirstName(currentUser.name)}, welcome back! 👋` : 'Admin Dashboard'}
-              </h1>
+                </h1>
                 <p className="text-muted-foreground mt-1 text-sm md:text-base">Manage users and system settings</p>
               </div>
             </div>
@@ -375,19 +369,19 @@ export default function AdminPage() {
                   <User className="h-5 w-5" />
                 )}
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleLogout} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
                 className="hidden sm:flex hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </Button>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={handleLogout} 
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleLogout}
                 className="sm:hidden hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
               >
                 <LogOut className="h-4 w-4" />
@@ -420,7 +414,7 @@ export default function AdminPage() {
               )}
             </div>
           </SheetHeader>
-          
+
           <div className="mt-6 space-y-4 pb-6">
             {notifications.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
@@ -433,11 +427,10 @@ export default function AdminPage() {
                   key={notification.id}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className={`border rounded-lg p-4 transition-all ${
-                    notification.read
+                  className={`border rounded-lg p-4 transition-all ${notification.read
                       ? 'border-border bg-muted/30'
                       : 'border-primary/50 bg-primary/5 shadow-sm'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
@@ -574,7 +567,7 @@ export default function AdminPage() {
               Manage your profile and account settings
             </SheetDescription>
           </SheetHeader>
-          
+
           <div className="mt-6 space-y-6 pb-6">
             {/* Profile Preview */}
             <div className="flex flex-col items-center text-center pb-6 border-b border-border">
@@ -640,9 +633,9 @@ export default function AdminPage() {
                 Menu
               </h3>
               <div className="space-y-1.5">
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm" 
+                <Button
+                  variant="outline"
+                  className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm"
                   asChild
                   onClick={() => setIsSidebarOpen(false)}
                 >
@@ -651,8 +644,8 @@ export default function AdminPage() {
                     Profile
                   </Link>
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm"
                   disabled
                   title="Settings coming soon"
@@ -660,15 +653,15 @@ export default function AdminPage() {
                   <Settings className="h-4 w-4 mr-2" />
                   Settings
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm"
                 >
                   <Bell className="h-4 w-4 mr-2" />
                   Notifications
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="w-full justify-start hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all shadow-sm"
                 >
                   <HelpCircle className="h-4 w-4 mr-2" />
@@ -779,9 +772,8 @@ export default function AdminPage() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <div
-                          className={`p-4 border border-border rounded-lg cursor-pointer transition-all hover:bg-accent/50 ${
-                            selectedUser?._id === user._id ? "bg-accent border-primary" : ""
-                          }`}
+                          className={`p-4 border border-border rounded-lg cursor-pointer transition-all hover:bg-accent/50 ${selectedUser?._id === user._id ? "bg-accent border-primary" : ""
+                            }`}
                           onClick={() => setSelectedUser(user)}
                         >
                           <div className="flex items-center justify-between">

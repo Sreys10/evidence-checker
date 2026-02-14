@@ -12,12 +12,7 @@ export interface ReportData {
   };
   status: "authentic" | "tampered";
   confidence: number;
-  analysis?: {
-    pixelAnalysis: number;
-    metadataAnalysis: number;
-    compressionAnalysis: number;
-    overallScore: number;
-  };
+
   metadata?: {
     camera?: string;
     date?: string;
@@ -31,6 +26,30 @@ export interface ReportData {
     quality: number;
     scamProb: number;
   };
+  faceDetection?: {
+    faces_detected: number;
+    matches: Array<{
+      face_number: number;
+      match_found: boolean;
+      match_info: {
+        person_name: string;
+        distance: number;
+        original_image_base64?: string;
+        metadata?: {
+          name?: string;
+          age?: number;
+          email?: string;
+          phone?: string;
+          notes?: string;
+          added_by?: {
+            name: string;
+            email: string;
+          };
+        };
+      } | null;
+      face_image_base64: string;
+    }>;
+  };
 }
 
 export const generateHTMLReport = (data: ReportData): string => {
@@ -38,24 +57,11 @@ export const generateHTMLReport = (data: ReportData): string => {
   const statusIcon = data.status === "authentic" ? "✓" : "⚠";
   const riskLevel = data.confidence > 80 ? "LOW" : data.confidence > 50 ? "MEDIUM" : "HIGH";
   const riskColor = riskLevel === "LOW" ? "#10b981" : riskLevel === "MEDIUM" ? "#f59e0b" : "#ef4444";
-  
-  // Calculate detailed analysis metrics
-  const getAnalysisInterpretation = (score: number, type: string) => {
-    if (score >= 90) return { level: "Excellent", color: "#10b981", desc: "No anomalies detected" };
-    if (score >= 75) return { level: "Good", color: "#22c55e", desc: "Minimal concerns" };
-    if (score >= 60) return { level: "Moderate", color: "#f59e0b", desc: "Some inconsistencies noted" };
-    if (score >= 40) return { level: "Poor", color: "#f97316", desc: "Significant issues detected" };
-    return { level: "Critical", color: "#ef4444", desc: "Severe tampering indicators" };
-  };
-
-  const pixelAnalysis = data.analysis ? getAnalysisInterpretation(data.analysis.pixelAnalysis, "pixel") : null;
-  const metadataAnalysis = data.analysis ? getAnalysisInterpretation(data.analysis.metadataAnalysis, "metadata") : null;
-  const compressionAnalysis = data.analysis ? getAnalysisInterpretation(data.analysis.compressionAnalysis, "compression") : null;
 
   const reportDate = new Date(data.generatedDate);
-  const formattedDate = reportDate.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
+  const formattedDate = reportDate.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
@@ -476,10 +482,10 @@ export const generateHTMLReport = (data: ReportData): string => {
             </div>
           </div>
           <p style="margin-top: 20px; font-size: 14px; color: #475569; line-height: 1.7;">
-            ${data.status === "authentic" 
-              ? `The digital evidence has been examined using multiple forensic techniques and shows <strong>no significant indicators of tampering or manipulation</strong>. The image exhibits consistent pixel patterns, valid metadata structures, and normal compression characteristics consistent with authentic digital photography.`
-              : `The digital evidence analysis has identified <strong>multiple indicators suggesting potential tampering or manipulation</strong>. Inconsistencies were detected across pixel-level analysis, metadata examination, and compression artifact patterns. Further investigation is recommended.`
-            }
+            ${data.status === "authentic"
+      ? `The digital evidence has been examined using multiple forensic techniques and shows <strong>no significant indicators of tampering or manipulation</strong>. The image exhibits consistent pixel patterns, valid metadata structures, and normal compression characteristics consistent with authentic digital photography.`
+      : `The digital evidence analysis has identified <strong>multiple indicators suggesting potential tampering or manipulation</strong>. Inconsistencies were detected across pixel-level analysis, metadata examination, and compression artifact patterns. Further investigation is recommended.`
+    }
           </p>
         </div>
       </div>
@@ -517,94 +523,13 @@ export const generateHTMLReport = (data: ReportData): string => {
         <div class="methodology">
           <h4>Forensic Analysis Techniques Applied</h4>
           <ul>
-            <li><strong>Pixel-Level Analysis:</strong> Advanced computer vision algorithms examine pixel patterns, edge consistency, and statistical anomalies that may indicate digital manipulation or compositing.</li>
-            <li><strong>Metadata Forensics:</strong> Comprehensive examination of EXIF data, file structure, timestamps, and embedded information to verify authenticity and detect inconsistencies.</li>
-            <li><strong>Compression Artifact Analysis:</strong> Evaluation of JPEG/PNG compression patterns, quantization tables, and re-compression artifacts that may reveal editing history.</li>
-            <li><strong>AI-Powered Detection:</strong> Machine learning models analyze deepfake probability, AI-generated content indicators, image quality metrics, and scammer detection patterns.</li>
+      <li><strong>AI-Powered Detection:</strong> Machine learning models analyze deepfake probability, AI-generated content indicators, image quality metrics, and scammer detection patterns.</li>
             <li><strong>Statistical Analysis:</strong> Multi-dimensional statistical evaluation combining all detection methods to provide comprehensive authenticity assessment.</li>
           </ul>
         </div>
       </div>
 
-      ${data.analysis ? `
-      <!-- Detailed Analysis Results -->
-      <div class="section">
-        <h2 class="section-title">3. Detailed Forensic Analysis</h2>
-        
-        <h3 class="subsection-title">3.1 Overall Assessment Score</h3>
-        <div class="analysis-scores">
-          <div class="score-card" style="background: linear-gradient(135deg, ${pixelAnalysis?.color || '#6366f1'} 0%, ${pixelAnalysis?.color || '#8b5cf6'}dd 100%);">
-            <label>Pixel-Level Analysis</label>
-            <value>${data.analysis.pixelAnalysis.toFixed(1)}%</value>
-            <div class="interpretation">${pixelAnalysis?.level || 'N/A'} - ${pixelAnalysis?.desc || ''}</div>
-          </div>
-          <div class="score-card" style="background: linear-gradient(135deg, ${metadataAnalysis?.color || '#6366f1'} 0%, ${metadataAnalysis?.color || '#8b5cf6'}dd 100%);">
-            <label>Metadata Analysis</label>
-            <value>${data.analysis.metadataAnalysis.toFixed(1)}%</value>
-            <div class="interpretation">${metadataAnalysis?.level || 'N/A'} - ${metadataAnalysis?.desc || ''}</div>
-          </div>
-          <div class="score-card" style="background: linear-gradient(135deg, ${compressionAnalysis?.color || '#6366f1'} 0%, ${compressionAnalysis?.color || '#8b5cf6'}dd 100%);">
-            <label>Compression Analysis</label>
-            <value>${data.analysis.compressionAnalysis.toFixed(1)}%</value>
-            <div class="interpretation">${compressionAnalysis?.level || 'N/A'} - ${compressionAnalysis?.desc || ''}</div>
-          </div>
-          <div class="score-card" style="background: linear-gradient(135deg, ${statusColor} 0%, ${statusColor}dd 100%);">
-            <label>Overall Authenticity Score</label>
-            <value>${data.analysis.overallScore.toFixed(1)}%</value>
-            <div class="interpretation">${data.status === "authentic" ? "Authentic" : "Tampering Detected"}</div>
-          </div>
-        </div>
 
-        <div class="detailed-analysis">
-          <h3 class="subsection-title">3.2 Analysis Breakdown</h3>
-          
-          <div class="analysis-item">
-            <h4>Pixel-Level Forensic Examination</h4>
-            <p><strong>Score: ${data.analysis.pixelAnalysis.toFixed(1)}%</strong> | <strong>Status: ${pixelAnalysis?.level || 'N/A'}</strong></p>
-            <p>
-              ${data.analysis.pixelAnalysis >= 90 
-                ? "The pixel-level analysis reveals consistent patterns throughout the image with no detectable anomalies. Pixel distribution, edge detection, and statistical analysis all indicate authentic digital capture without signs of manipulation or compositing."
-                : data.analysis.pixelAnalysis >= 75
-                ? "Pixel analysis shows minor inconsistencies that may be attributed to normal image processing or compression artifacts. No significant tampering indicators were detected at the pixel level."
-                : data.analysis.pixelAnalysis >= 60
-                ? "The pixel-level examination identified some inconsistencies in pixel patterns and edge characteristics. These anomalies may indicate localized editing or manipulation, requiring further investigation."
-                : "Critical anomalies detected in pixel-level analysis. Inconsistent pixel patterns, edge artifacts, and statistical deviations strongly suggest digital manipulation or compositing has occurred."
-              }
-            </p>
-          </div>
-
-          <div class="analysis-item">
-            <h4>Metadata Forensics Examination</h4>
-            <p><strong>Score: ${data.analysis.metadataAnalysis.toFixed(1)}%</strong> | <strong>Status: ${metadataAnalysis?.level || 'N/A'}</strong></p>
-            <p>
-              ${data.analysis.metadataAnalysis >= 90
-                ? "Metadata examination confirms valid EXIF data structure with consistent timestamps, camera information, and file attributes. No evidence of metadata tampering or inconsistencies detected."
-                : data.analysis.metadataAnalysis >= 75
-                ? "Metadata analysis shows mostly consistent information with minor discrepancies that may be attributed to file conversion or standard processing operations."
-                : data.analysis.metadataAnalysis >= 60
-                ? "Metadata examination revealed inconsistencies in timestamps, camera information, or file attributes that may indicate manipulation or file editing history."
-                : "Severe metadata inconsistencies detected. Missing, corrupted, or contradictory metadata information strongly suggests the file has been modified or reconstructed."
-              }
-            </p>
-          </div>
-
-          <div class="analysis-item">
-            <h4>Compression Artifact Analysis</h4>
-            <p><strong>Score: ${data.analysis.compressionAnalysis.toFixed(1)}%</strong> | <strong>Status: ${compressionAnalysis?.level || 'N/A'}</strong></p>
-            <p>
-              ${data.analysis.compressionAnalysis >= 90
-                ? "Compression analysis indicates normal, consistent compression patterns consistent with original image capture. No evidence of re-compression artifacts or editing history detected."
-                : data.analysis.compressionAnalysis >= 75
-                ? "Compression patterns show minor variations that may indicate file conversion or standard image processing, but no clear signs of malicious manipulation."
-                : data.analysis.compressionAnalysis >= 60
-                ? "Compression artifact analysis detected inconsistencies in quantization tables and compression patterns that may indicate the image has been edited and re-saved."
-                : "Critical compression anomalies detected. Multiple compression signatures, inconsistent quantization tables, and re-compression artifacts strongly indicate the image has been edited and saved multiple times."
-              }
-            </p>
-          </div>
-        </div>
-      </div>
-      ` : ''}
 
       ${data.metadata ? `
       <!-- Metadata Examination -->
@@ -638,12 +563,12 @@ export const generateHTMLReport = (data: ReportData): string => {
         </div>
         <div class="technical-details" style="margin-top: 20px;">
           <p><strong>Metadata Analysis Notes:</strong></p>
-          <p>${data.metadata.software 
-            ? `⚠️ <code>Processing software detected:</code> The presence of "${data.metadata.software}" in metadata suggests the image may have been processed or edited using image manipulation software. This does not necessarily indicate tampering but warrants additional scrutiny.`
-            : data.metadata.camera && data.metadata.date
-            ? `✓ <code>Metadata consistency:</code> Camera information and timestamp data are present and consistent. No obvious signs of metadata tampering detected.`
-            : `⚠️ <code>Limited metadata:</code> Some expected metadata fields are missing or unavailable. This may indicate file conversion, editing, or metadata stripping.`
-          }</p>
+          <p>${data.metadata.software
+        ? `⚠️ <code>Processing software detected:</code> The presence of "${data.metadata.software}" in metadata suggests the image may have been processed or edited using image manipulation software. This does not necessarily indicate tampering but warrants additional scrutiny.`
+        : data.metadata.camera && data.metadata.date
+          ? `✓ <code>Metadata consistency:</code> Camera information and timestamp data are present and consistent. No obvious signs of metadata tampering detected.`
+          : `⚠️ <code>Limited metadata:</code> Some expected metadata fields are missing or unavailable. This may indicate file conversion, editing, or metadata stripping.`
+      }</p>
         </div>
       </div>
       ` : ''}
@@ -682,10 +607,130 @@ export const generateHTMLReport = (data: ReportData): string => {
       </div>
       `}
 
+      ${data.faceDetection ? `
+      <!-- Face Detection Analysis -->
+      <div class="section">
+        <h2 class="section-title">6. Face Detection & Recognition Analysis</h2>
+        <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
+          Advanced face detection and recognition analysis was performed to identify individuals in the image 
+          and match them against the registered database. This analysis helps verify the identity of persons 
+          present in the evidence.
+        </p>
+        
+        <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 25px; margin: 20px 0;">
+          <h3 style="color: #1e3a8a; margin-bottom: 15px; font-size: 20px;">Face Detection Summary</h3>
+          <p style="color: #1e40af; font-size: 18px; font-weight: 600; margin-bottom: 10px;">
+            Total Faces Detected: <strong>${data.faceDetection.faces_detected}</strong>
+          </p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.7;">
+            ${data.faceDetection.faces_detected === 0
+        ? "No faces were detected in this image. This may indicate the image does not contain human subjects, or the image quality is insufficient for face detection."
+        : data.faceDetection.faces_detected === 1
+          ? "One face was detected in the image."
+          : `${data.faceDetection.faces_detected} faces were detected in the image.`
+      }
+          </p>
+        </div>
+
+        ${data.faceDetection.matches && data.faceDetection.matches.length > 0 ? `
+        <h3 class="subsection-title">6.1 Face Recognition Results</h3>
+        <div style="display: grid; gap: 20px; margin: 25px 0;">
+          ${data.faceDetection.matches.map((match, idx) => `
+          <div style="background: ${match.match_found ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' : 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'}; border: 2px solid ${match.match_found ? '#22c55e' : '#f59e0b'}; border-radius: 12px; padding: 25px;">
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+              <h4 style="color: ${match.match_found ? '#166534' : '#92400e'}; font-size: 18px; margin: 0; margin-right: 15px;">Face ${match.face_number}</h4>
+              <span style="background: ${match.match_found ? '#22c55e' : '#f59e0b'}; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">
+                ${match.match_found ? '✓ MATCH FOUND' : '⚠ NO MATCH'}
+              </span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;">
+              <div>
+                <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600;">DETECTED FACE</p>
+                <img src="${match.face_image_base64}" alt="Detected Face ${match.face_number}" style="width: 100%; max-width: 200px; border-radius: 8px; border: 2px solid #d1d5db;" />
+              </div>
+              ${match.match_found && match.match_info?.original_image_base64 ? `
+              <div>
+                <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600;">DATABASE MATCH</p>
+                <img src="${match.match_info.original_image_base64}" alt="Database Match" style="width: 100%; max-width: 200px; border-radius: 8px; border: 2px solid #22c55e;" />
+              </div>
+              ` : `
+              <div>
+                <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600;">DATABASE MATCH</p>
+                <div style="width: 100%; max-width: 200px; height: 200px; background: #f3f4f6; border-radius: 8px; border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center; color: #9ca3af;">
+                  No Match Found
+                </div>
+              </div>
+              `}
+            </div>
+
+            ${match.match_found && match.match_info ? `
+            <div style="background: white; border-radius: 8px; padding: 20px; margin-top: 15px; border-left: 4px solid #22c55e;">
+              <h5 style="color: #166534; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Match Information</h5>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div>
+                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">PERSON ID</p>
+                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.person_name}</p>
+                </div>
+                ${match.match_info.metadata?.name ? `
+                <div>
+                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">FULL NAME</p>
+                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.name}</p>
+                </div>
+                ` : ''}
+                ${match.match_info.metadata?.age ? `
+                <div>
+                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">AGE</p>
+                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.age}</p>
+                </div>
+                ` : ''}
+                ${match.match_info.metadata?.email ? `
+                <div>
+                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">EMAIL</p>
+                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.email}</p>
+                </div>
+                ` : ''}
+                ${match.match_info.metadata?.phone ? `
+                <div>
+                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">PHONE</p>
+                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.phone}</p>
+                </div>
+                ` : ''}
+                <div>
+                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">SIMILARITY</p>
+                  <p style="color: #1f2937; font-weight: 600;">${((1 - match.match_info.distance) * 100).toFixed(2)}%</p>
+                </div>
+                <div>
+                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">DISTANCE</p>
+                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.distance.toFixed(4)}</p>
+                </div>
+              </div>
+              ${match.match_info.metadata?.added_by ? `
+              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">ADDED TO DATABASE BY</p>
+                <p style="color: #1f2937; font-size: 13px;">${match.match_info.metadata.added_by.name} (${match.match_info.metadata.added_by.email})</p>
+              </div>
+              ` : ''}
+            </div>
+            ` : `
+            <div style="background: white; border-radius: 8px; padding: 20px; margin-top: 15px; border-left: 4px solid #f59e0b;">
+              <p style="color: #92400e; font-size: 14px; line-height: 1.7;">
+                No matching identity found in the registered database. This face does not correspond to any known person 
+                in the system. The individual may not be registered, or the image quality may be insufficient for accurate matching.
+              </p>
+            </div>
+            `}
+          </div>
+          `).join('')}
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
+
       ${data.aiDetection ? `
       <!-- AI-Powered Detection Analysis -->
       <div class="section">
-        <h2 class="section-title">6. AI-Powered Detection Analysis</h2>
+        <h2 class="section-title">${data.faceDetection ? '7' : '6'}. AI-Powered Detection Analysis</h2>
         <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
           Advanced machine learning models were employed to detect synthetic content, deepfake manipulation, 
           AI-generated imagery, and other sophisticated tampering techniques that may not be detectable through 
@@ -723,11 +768,11 @@ export const generateHTMLReport = (data: ReportData): string => {
             <p><strong>Probability: ${(data.aiDetection.deepfake * 100).toFixed(1)}%</strong></p>
             <p>
               ${data.aiDetection.deepfake > 0.5
-                ? "⚠️ <strong>HIGH RISK:</strong> The AI detection system has identified a high probability that this image contains deepfake or face-swap manipulation. Facial features, lighting consistency, and biometric patterns show anomalies consistent with synthetic face generation or replacement techniques."
-                : data.aiDetection.deepfake > 0.3
-                ? "⚠️ <strong>MODERATE RISK:</strong> Some indicators of potential deepfake manipulation were detected. While not conclusive, facial analysis revealed minor inconsistencies that warrant further investigation."
-                : "✓ <strong>LOW RISK:</strong> Deepfake detection analysis found no significant indicators of face-swap or deepfake manipulation. Facial features and biometric patterns appear consistent with authentic photography."
-              }
+        ? "⚠️ <strong>HIGH RISK:</strong> The AI detection system has identified a high probability that this image contains deepfake or face-swap manipulation. Facial features, lighting consistency, and biometric patterns show anomalies consistent with synthetic face generation or replacement techniques."
+        : data.aiDetection.deepfake > 0.3
+          ? "⚠️ <strong>MODERATE RISK:</strong> Some indicators of potential deepfake manipulation were detected. While not conclusive, facial analysis revealed minor inconsistencies that warrant further investigation."
+          : "✓ <strong>LOW RISK:</strong> Deepfake detection analysis found no significant indicators of face-swap or deepfake manipulation. Facial features and biometric patterns appear consistent with authentic photography."
+      }
             </p>
           </div>
 
@@ -736,11 +781,11 @@ export const generateHTMLReport = (data: ReportData): string => {
             <p><strong>Probability: ${(data.aiDetection.aiGenerated * 100).toFixed(1)}%</strong></p>
             <p>
               ${data.aiDetection.aiGenerated > 0.5
-                ? "⚠️ <strong>Synthetic Content Detected:</strong> Analysis indicates this image was likely generated or significantly modified using AI image generation tools (e.g., DALL-E, Midjourney, Stable Diffusion). Characteristic patterns, texture inconsistencies, and generation artifacts were identified."
-                : data.aiDetection.aiGenerated > 0.3
-                ? "⚠️ <strong>Possible AI Processing:</strong> Some indicators suggest the image may have been processed or enhanced using AI tools, though definitive synthetic generation was not confirmed."
-                : "✓ <strong>Authentic Content:</strong> No significant indicators of AI-generated content detected. The image exhibits characteristics consistent with authentic digital photography or legitimate image capture."
-              }
+        ? "⚠️ <strong>Synthetic Content Detected:</strong> Analysis indicates this image was likely generated or significantly modified using AI image generation tools (e.g., DALL-E, Midjourney, Stable Diffusion). Characteristic patterns, texture inconsistencies, and generation artifacts were identified."
+        : data.aiDetection.aiGenerated > 0.3
+          ? "⚠️ <strong>Possible AI Processing:</strong> Some indicators suggest the image may have been processed or enhanced using AI tools, though definitive synthetic generation was not confirmed."
+          : "✓ <strong>Authentic Content:</strong> No significant indicators of AI-generated content detected. The image exhibits characteristics consistent with authentic digital photography or legitimate image capture."
+      }
             </p>
           </div>
 
@@ -749,11 +794,11 @@ export const generateHTMLReport = (data: ReportData): string => {
             <p><strong>Quality Index: ${(data.aiDetection.quality * 100).toFixed(1)}%</strong></p>
             <p>
               ${data.aiDetection.quality > 0.7
-                ? "✓ <strong>High Quality:</strong> The image demonstrates excellent quality with clear resolution, proper exposure, and minimal compression artifacts. Quality metrics are consistent with professional or high-end consumer photography."
-                : data.aiDetection.quality > 0.4
-                ? "⚠️ <strong>Moderate Quality:</strong> Image quality is acceptable but shows some degradation, compression artifacts, or processing that may limit forensic analysis capabilities. Quality is sufficient for most examination purposes."
-                : "⚠️ <strong>Low Quality:</strong> Significant quality issues detected including heavy compression, resolution limitations, or processing artifacts. These factors may impact the reliability of forensic analysis and should be considered when evaluating evidence."
-              }
+        ? "✓ <strong>High Quality:</strong> The image demonstrates excellent quality with clear resolution, proper exposure, and minimal compression artifacts. Quality metrics are consistent with professional or high-end consumer photography."
+        : data.aiDetection.quality > 0.4
+          ? "⚠️ <strong>Moderate Quality:</strong> Image quality is acceptable but shows some degradation, compression artifacts, or processing that may limit forensic analysis capabilities. Quality is sufficient for most examination purposes."
+          : "⚠️ <strong>Low Quality:</strong> Significant quality issues detected including heavy compression, resolution limitations, or processing artifacts. These factors may impact the reliability of forensic analysis and should be considered when evaluating evidence."
+      }
             </p>
           </div>
 
@@ -762,9 +807,9 @@ export const generateHTMLReport = (data: ReportData): string => {
             <p><strong>Risk Probability: ${(data.aiDetection.scamProb * 100).toFixed(1)}%</strong></p>
             <p>
               ${data.aiDetection.scamProb > 0.5
-                ? "⚠️ <strong>HIGH FRAUD RISK:</strong> The detection system has identified characteristics commonly associated with fraudulent or scam-related imagery. This may include profile photos used in social engineering, catfishing, or other deceptive practices. Exercise caution when evaluating the source and context of this image."
-                : "✓ <strong>LOW FRAUD RISK:</strong> No significant indicators of fraudulent or scam-related usage patterns were detected. The image does not exhibit characteristics commonly associated with deceptive imagery."
-              }
+        ? "⚠️ <strong>HIGH FRAUD RISK:</strong> The detection system has identified characteristics commonly associated with fraudulent or scam-related imagery. This may include profile photos used in social engineering, catfishing, or other deceptive practices. Exercise caution when evaluating the source and context of this image."
+        : "✓ <strong>LOW FRAUD RISK:</strong> No significant indicators of fraudulent or scam-related usage patterns were detected. The image does not exhibit characteristics commonly associated with deceptive imagery."
+      }
             </p>
           </div>
         </div>
@@ -773,7 +818,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Risk Assessment -->
       <div class="section">
-        <h2 class="section-title">7. Risk Assessment & Classification</h2>
+        <h2 class="section-title">${data.faceDetection ? '8' : '7'}. Risk Assessment & Classification</h2>
         <div style="background: ${riskColor}15; border: 2px solid ${riskColor}; border-radius: 12px; padding: 25px; margin: 20px 0;">
           <div style="display: flex; align-items: center; margin-bottom: 15px;">
             <h3 style="color: ${riskColor}; font-size: 22px; margin: 0; margin-right: 15px;">Risk Level: ${riskLevel}</h3>
@@ -784,29 +829,29 @@ export const generateHTMLReport = (data: ReportData): string => {
           </p>
           <p style="color: #4b5563; font-size: 14px; line-height: 1.7;">
             ${riskLevel === "LOW"
-              ? "The evidence demonstrates high authenticity indicators with minimal risk factors. The image shows consistent forensic characteristics and can be considered reliable for evidentiary purposes with standard precautions."
-              : riskLevel === "MEDIUM"
-              ? "The evidence exhibits some inconsistencies or moderate risk indicators. While not definitively tampered, additional verification and expert review are recommended before relying on this evidence in critical applications."
-              : "The evidence shows significant risk indicators and multiple anomalies suggesting potential tampering. This evidence should be treated with extreme caution and requires additional expert forensic examination before use in any legal or official capacity."
-            }
+      ? "The evidence demonstrates high authenticity indicators with minimal risk factors. The image shows consistent forensic characteristics and can be considered reliable for evidentiary purposes with standard precautions."
+      : riskLevel === "MEDIUM"
+        ? "The evidence exhibits some inconsistencies or moderate risk indicators. While not definitively tampered, additional verification and expert review are recommended before relying on this evidence in critical applications."
+        : "The evidence shows significant risk indicators and multiple anomalies suggesting potential tampering. This evidence should be treated with extreme caution and requires additional expert forensic examination before use in any legal or official capacity."
+    }
           </p>
         </div>
       </div>
 
       <!-- Recommendations -->
       <div class="section">
-        <h2 class="section-title">8. Recommendations & Next Steps</h2>
+        <h2 class="section-title">${data.faceDetection ? '9' : '8'}. Recommendations & Next Steps</h2>
         <div class="recommendations">
           <h4>Forensic Analysis Recommendations</h4>
           <ul>
             ${data.status === "authentic"
-              ? `
+      ? `
               <li>✓ The evidence appears authentic and can be used with standard evidentiary procedures.</li>
               <li>Maintain proper chain of custody documentation for all future handling of this evidence.</li>
               <li>Store the original file in a secure, tamper-evident location with backup copies.</li>
               <li>Document all access and modifications to the evidence file going forward.</li>
               `
-              : `
+      : `
               <li>⚠️ <strong>Immediate Action Required:</strong> Do not rely solely on this evidence without additional verification.</li>
               <li>Engage a certified digital forensics expert for independent analysis and validation.</li>
               <li>Obtain the original source file and compare with this evidence to identify discrepancies.</li>
@@ -814,11 +859,11 @@ export const generateHTMLReport = (data: ReportData): string => {
               <li>Consider additional forensic techniques such as hash verification, blockchain timestamping, or expert witness testimony.</li>
               <li>If this evidence is critical, consider obtaining multiple independent forensic examinations.</li>
               `
-            }
+    }
             ${data.aiDetection && (data.aiDetection.deepfake > 0.5 || data.aiDetection.aiGenerated > 0.5)
-              ? `<li>⚠️ <strong>AI Manipulation Alert:</strong> High probability of AI-generated or deepfake content detected. Verify the source and context of this image through independent means.</li>`
-              : ''
-            }
+      ? `<li>⚠️ <strong>AI Manipulation Alert:</strong> High probability of AI-generated or deepfake content detected. Verify the source and context of this image through independent means.</li>`
+      : ''
+    }
             <li>Preserve all original files, metadata, and analysis reports for potential legal proceedings.</li>
             <li>Maintain documentation of the analysis methodology and tools used for transparency and reproducibility.</li>
           </ul>
@@ -827,7 +872,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Chain of Custody -->
       <div class="section">
-        <h2 class="section-title">9. Chain of Custody</h2>
+        <h2 class="section-title">${data.faceDetection ? '10' : '9'}. Chain of Custody</h2>
         <div class="chain-of-custody">
           <p style="margin-bottom: 15px; color: #374151; font-weight: 600;">
             Evidence handling and analysis timeline:
@@ -867,28 +912,28 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Conclusion -->
       <div class="section">
-        <h2 class="section-title">10. Final Conclusion</h2>
+        <h2 class="section-title">${data.faceDetection ? '11' : '10'}. Final Conclusion</h2>
         <div style="background: ${data.status === "authentic" ? "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)" : "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)"}; border: 3px solid ${statusColor}; border-radius: 12px; padding: 30px; margin: 25px 0;">
           <h3 style="color: ${statusColor}; font-size: 22px; margin-bottom: 20px; font-weight: 700;">
             ${statusIcon} FINAL VERDICT: ${data.status.toUpperCase()}
           </h3>
           <p style="font-size: 16px; line-height: 1.9; color: #1f2937; margin-bottom: 15px;">
-            ${data.status === "authentic" 
-              ? `After comprehensive digital forensics analysis employing multiple detection methodologies, this evidence file 
+            ${data.status === "authentic"
+      ? `After comprehensive digital forensics analysis employing multiple detection methodologies, this evidence file 
               <strong>${data.evidenceName}</strong> has been determined to be <strong>AUTHENTIC</strong> with 
               <strong>${data.confidence.toFixed(1)}% confidence</strong>. The analysis examined pixel-level patterns, 
               metadata integrity, compression artifacts, and AI-powered detection systems. No significant indicators of 
               tampering, manipulation, or digital alteration were identified. The image exhibits characteristics consistent 
               with authentic digital capture and can be considered reliable for evidentiary purposes, subject to proper 
               chain of custody maintenance.`
-              : `After comprehensive digital forensics analysis employing multiple detection methodologies, this evidence file 
+      : `After comprehensive digital forensics analysis employing multiple detection methodologies, this evidence file 
               <strong>${data.evidenceName}</strong> has been flagged as showing <strong>SIGNS OF TAMPERING</strong> with 
               <strong>${data.confidence.toFixed(1)}% confidence</strong>. The analysis identified ${data.anomalies?.length || 0} 
               ${data.anomalies?.length === 1 ? 'anomaly' : 'anomalies'} and inconsistencies across multiple forensic examination 
               methods. These findings suggest the image may have been digitally altered, composited, or manipulated. 
               <strong>This evidence should not be relied upon without additional independent verification and expert review.</strong> 
               Further investigation is strongly recommended before using this evidence in any legal or official capacity.`
-            }
+    }
           </p>
           <div style="margin-top: 25px; padding-top: 20px; border-top: 2px solid ${statusColor}40;">
             <p style="font-size: 14px; color: #475569; line-height: 1.7;">
@@ -902,7 +947,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Technical Appendix -->
       <div class="section page-break">
-        <h2 class="section-title">11. Technical Appendix</h2>
+        <h2 class="section-title">${data.faceDetection ? '12' : '11'}. Technical Appendix</h2>
         <div class="technical-details">
           <p><strong>Report Technical Information:</strong></p>
           <p><code>Report ID:</code> ${data.id}</p>
@@ -910,17 +955,15 @@ export const generateHTMLReport = (data: ReportData): string => {
           <p><code>Analysis Date:</code> ${formattedDate}</p>
           <p><code>Analyst:</code> ${data.generatedBy.name} (${data.generatedBy.email})</p>
           <p><code>Analysis Confidence:</code> ${data.confidence.toFixed(2)}%</p>
-          ${data.analysis ? `
-          <p><code>Pixel Analysis Score:</code> ${data.analysis.pixelAnalysis.toFixed(2)}%</p>
-          <p><code>Metadata Analysis Score:</code> ${data.analysis.metadataAnalysis.toFixed(2)}%</p>
-          <p><code>Compression Analysis Score:</code> ${data.analysis.compressionAnalysis.toFixed(2)}%</p>
-          <p><code>Overall Authenticity Score:</code> ${data.analysis.overallScore.toFixed(2)}%</p>
-          ` : ''}
           ${data.aiDetection ? `
           <p><code>Deepfake Probability:</code> ${(data.aiDetection.deepfake * 100).toFixed(2)}%</p>
           <p><code>AI-Generated Probability:</code> ${(data.aiDetection.aiGenerated * 100).toFixed(2)}%</p>
           <p><code>Image Quality Index:</code> ${(data.aiDetection.quality * 100).toFixed(2)}%</p>
           <p><code>Fraud Risk Probability:</code> ${(data.aiDetection.scamProb * 100).toFixed(2)}%</p>
+          ` : ''}
+          ${data.faceDetection ? `
+          <p><code>Faces Detected:</code> ${data.faceDetection.faces_detected}</p>
+          <p><code>Matches Found:</code> ${data.faceDetection.matches.filter(m => m.match_found).length} of ${data.faceDetection.matches.length}</p>
           ` : ''}
           <p style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #d1d5db;">
             <strong>Analysis Tools:</strong> Advanced computer vision algorithms, metadata forensics, compression artifact analysis, 

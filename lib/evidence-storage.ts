@@ -1,5 +1,13 @@
 // Centralized evidence storage utility using localStorage
 
+export interface StoredCase {
+  id: string;
+  caseNumber: string;
+  caseName: string;
+  createdDate: string;
+  userId?: string;
+}
+
 export interface StoredEvidence {
   id: string;
   fileName: string;
@@ -11,12 +19,12 @@ export interface StoredEvidence {
   confidence?: number | null;
   size: string;
   type: string;
-  analysis?: {
-    pixelAnalysis: number;
-    metadataAnalysis: number;
-    compressionAnalysis: number;
-    overallScore: number;
-  };
+  // Case management
+  caseId?: string;
+  caseNumber?: string;
+  caseName?: string;
+  evidenceName?: string;
+
   metadata?: {
     camera?: string;
     date?: string;
@@ -32,16 +40,41 @@ export interface StoredEvidence {
   };
   blockchainHash?: string | null;
   reportGenerated?: boolean;
+  faceDetection?: {
+    faces_detected: number;
+    matches: Array<{
+      face_number: number;
+      match_found: boolean;
+      match_info: {
+        person_name: string;
+        distance: number;
+        original_image_base64?: string;
+        metadata?: {
+          name?: string;
+          age?: number;
+          email?: string;
+          phone?: string;
+          notes?: string;
+          added_by?: {
+            name: string;
+            email: string;
+          };
+        };
+      } | null;
+      face_image_base64: string;
+    }>;
+  };
 }
 
 const STORAGE_KEY_PREFIX = 'evidenceStorage_';
+const CASES_KEY_PREFIX = 'casesStorage_';
 
 /**
  * Get storage key for a specific user
  */
 function getStorageKey(userId?: string): string {
   if (typeof window === 'undefined') return '';
-  
+
   if (!userId) {
     // Try to get user from localStorage
     try {
@@ -56,7 +89,7 @@ function getStorageKey(userId?: string): string {
       userId = 'anonymous';
     }
   }
-  
+
   return `${STORAGE_KEY_PREFIX}${userId}`;
 }
 
@@ -65,7 +98,7 @@ function getStorageKey(userId?: string): string {
  */
 function getCurrentUserId(): string {
   if (typeof window === 'undefined') return 'anonymous';
-  
+
   try {
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -75,7 +108,7 @@ function getCurrentUserId(): string {
   } catch {
     // Ignore errors
   }
-  
+
   return 'anonymous';
 }
 
@@ -84,7 +117,7 @@ function getCurrentUserId(): string {
  */
 export function getAllEvidence(userId?: string): StoredEvidence[] {
   if (typeof window === 'undefined') return [];
-  
+
   try {
     const storageKey = getStorageKey(userId);
     const stored = localStorage.getItem(storageKey);
@@ -100,12 +133,12 @@ export function getAllEvidence(userId?: string): StoredEvidence[] {
  */
 export function saveEvidence(evidence: StoredEvidence, userId?: string): void {
   if (typeof window === 'undefined') return;
-  
+
   try {
     const storageKey = getStorageKey(userId);
     const allEvidence = getAllEvidence(userId);
     const existingIndex = allEvidence.findIndex(e => e.id === evidence.id);
-    
+
     if (existingIndex >= 0) {
       // Update existing evidence
       allEvidence[existingIndex] = evidence;
@@ -113,7 +146,7 @@ export function saveEvidence(evidence: StoredEvidence, userId?: string): void {
       // Add new evidence
       allEvidence.push(evidence);
     }
-    
+
     localStorage.setItem(storageKey, JSON.stringify(allEvidence));
   } catch (error) {
     console.error('Error saving evidence to storage:', error);
@@ -133,7 +166,7 @@ export function getEvidenceById(id: string, userId?: string): StoredEvidence | n
  */
 export function deleteEvidence(id: string, userId?: string): void {
   if (typeof window === 'undefined') return;
-  
+
   try {
     const storageKey = getStorageKey(userId);
     const allEvidence = getAllEvidence(userId);
@@ -149,11 +182,11 @@ export function deleteEvidence(id: string, userId?: string): void {
  */
 export function renameEvidence(id: string, newFileName: string, userId?: string): boolean {
   if (typeof window === 'undefined') return false;
-  
+
   try {
     const evidence = getEvidenceById(id, userId);
     if (!evidence) return false;
-    
+
     evidence.fileName = newFileName;
     saveEvidence(evidence, userId);
     return true;
@@ -172,12 +205,6 @@ export function updateEvidenceAnalysis(
     isTampered: boolean;
     confidence: number;
     anomalies: string[];
-    analysis: {
-      pixelAnalysis: number;
-      metadataAnalysis: number;
-      compressionAnalysis: number;
-      overallScore: number;
-    };
     metadata?: Record<string, unknown>;
     aiDetection?: {
       deepfake: number;
@@ -191,16 +218,15 @@ export function updateEvidenceAnalysis(
 ): void {
   const evidence = getEvidenceById(id, userId);
   if (!evidence) return;
-  
+
   evidence.analyzedDate = new Date().toISOString();
   evidence.status = "complete";
   evidence.result = analysis.isTampered ? "tampered" : "authentic";
   evidence.confidence = analysis.confidence;
-  evidence.analysis = analysis.analysis;
   evidence.metadata = analysis.metadata || evidence.metadata;
   evidence.anomalies = analysis.anomalies;
   evidence.aiDetection = analysis.aiDetection;
-  
+
   saveEvidence(evidence, userId);
 }
 
@@ -213,20 +239,78 @@ export function clearAllEvidence(userId?: string): void {
   localStorage.removeItem(storageKey);
 }
 
+// ---- CASE MANAGEMENT ----
+
+function getCasesKey(userId?: string): string {
+  if (typeof window === 'undefined') return '';
+  if (!userId) userId = getCurrentUserId();
+  return `${CASES_KEY_PREFIX}${userId}`;
+}
+
+export function getAllCases(userId?: string): StoredCase[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const key = getCasesKey(userId);
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error reading cases:', error);
+    return [];
+  }
+}
+
+export function saveCase(c: StoredCase, userId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = getCasesKey(userId);
+    const all = getAllCases(userId);
+    const idx = all.findIndex(x => x.id === c.id);
+    if (idx >= 0) all[idx] = c; else all.push(c);
+    localStorage.setItem(key, JSON.stringify(all));
+  } catch (error) {
+    console.error('Error saving case:', error);
+  }
+}
+
+export function getCaseById(id: string, userId?: string): StoredCase | null {
+  return getAllCases(userId).find(c => c.id === id) || null;
+}
+
+export function deleteCase(id: string, userId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = getCasesKey(userId);
+    const all = getAllCases(userId).filter(c => c.id !== id);
+    localStorage.setItem(key, JSON.stringify(all));
+    // Also delete evidence belonging to this case
+    const storageKey = getStorageKey(userId);
+    const allEvidence = getAllEvidence(userId).filter(e => e.caseId !== id);
+    localStorage.setItem(storageKey, JSON.stringify(allEvidence));
+  } catch (error) {
+    console.error('Error deleting case:', error);
+  }
+}
+
+export function getEvidenceByCase(caseId: string, userId?: string): StoredEvidence[] {
+  return getAllEvidence(userId).filter(e => e.caseId === caseId);
+}
+
 /**
  * Get statistics for current user
  */
 export function getUserStats(userId?: string): {
   totalEvidence: number;
+  totalCases: number;
   verified: number;
   tampered: number;
   reportsGenerated: number;
   onBlockchain: number;
 } {
   const allEvidence = getAllEvidence(userId);
+  const allCases = getAllCases(userId);
   const verified = allEvidence.filter(e => e.status === "complete" && e.result === "authentic").length;
   const tampered = allEvidence.filter(e => e.status === "complete" && e.result === "tampered").length;
-  
+
   // Count reports generated
   let reportsGenerated = 0;
   try {
@@ -234,7 +318,6 @@ export function getUserStats(userId?: string): {
     if (savedReports) {
       const reports = JSON.parse(savedReports);
       const currentUserId = userId || getCurrentUserId();
-      // Filter reports by current user
       reportsGenerated = reports.filter((r: { generatedBy?: { email?: string } }) => {
         try {
           const userStr = localStorage.getItem('user');
@@ -251,11 +334,12 @@ export function getUserStats(userId?: string): {
   } catch {
     // Ignore
   }
-  
+
   const onBlockchain = allEvidence.filter(e => e.blockchainHash).length;
-  
+
   return {
     totalEvidence: allEvidence.length,
+    totalCases: allCases.length,
     verified,
     tampered,
     reportsGenerated,

@@ -45,22 +45,48 @@ A comprehensive digital forensics platform for image authenticity verification a
    pip install -r requirements.txt
    ```
 
-4. **Set up environment variables:**
-   Create a `.env.local` file:
+4. **Set up MongoDB Atlas (Recommended):**
+   - Follow the detailed guide in [MONGODB_ATLAS_SETUP.md](./MONGODB_ATLAS_SETUP.md)
+   - Or use local MongoDB (see [SETUP_MONGODB.md](./SETUP_MONGODB.md))
+   
+   **Quick Setup:**
+   - Get your MongoDB Atlas connection string from https://cloud.mongodb.com/
+   - Format: `mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/`
+
+5. **Set up environment variables:**
+   
+   **For Next.js app** - Create `.env.local` in root:
    ```bash
-   MONGODB_URI=your_mongodb_connection_string
+   MONGODB_URI=mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/
    MONGODB_DB_NAME=evi-check
+   NEXT_PUBLIC_API_URL=http://localhost:5000
+   BACKEND_SERVICE_URL=http://localhost:5000
    IMAGE_DETECTION_API_USER=your_api_user
    IMAGE_DETECTION_API_SECRET=your_api_secret
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
+   
+   **For Backend service** - Create `.env` in `backend-service/`:
+   ```bash
+   MONGODB_URI=mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/
+   MONGODB_DB_NAME=evi-check
+   PORT=5000
+   ```
 
-5. **Run the development server:**
+6. **Start the backend service:**
+   ```bash
+   cd backend-service
+   python app.py
+   # Or: python start.py
+   ```
+   You should see: `✓ Successfully connected to MongoDB: evi-check`
+
+7. **Run the development server (in a new terminal):**
    ```bash
    npm run dev
    ```
 
-6. **Open [http://localhost:3000](http://localhost:3000)** in your browser
+8. **Open [http://localhost:3000](http://localhost:3000)** in your browser
 
 ## Deployment
 

@@ -38,18 +38,18 @@ export async function POST(request: NextRequest) {
       console.log('File name:', file.name);
       console.log('File type:', file.type);
       console.log('File size:', buffer.length);
-      
+
       // Use axios for better form-data handling
       const axios = (await import('axios')).default;
       const FormDataClass = (await import('form-data')).default;
       const FormDataInstance = new FormDataClass();
-      
+
       // Append file with proper metadata
       FormDataInstance.append('image', buffer, {
         filename: file.name || 'image.jpg',
         contentType: file.type || 'image/jpeg',
       });
-      
+
       // Use axios to send the request - it handles form-data streams properly
       const response = await axios.post(backendUrl, FormDataInstance, {
         headers: {
@@ -87,18 +87,18 @@ export async function POST(request: NextRequest) {
       );
     } catch (axiosError: unknown) {
       console.error('Axios request failed:', axiosError);
-      
+
       // Handle axios errors - they have response data
       const axios = (await import('axios')).default;
       if (axios.isAxiosError(axiosError)) {
         const status = axiosError.response?.status || 500;
         const errorData = axiosError.response?.data;
         const errorMessage = axiosError.message;
-        
+
         console.error('Axios error status:', status);
         console.error('Axios error data:', errorData);
         console.error('Axios error message:', errorMessage);
-        
+
         // Return detailed error information
         return NextResponse.json(
           {
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
           { status: status }
         );
       }
-      
+
       // If not an axios error, treat as generic error
       const errorMessage = axiosError instanceof Error ? axiosError.message : String(axiosError);
       return NextResponse.json(
@@ -122,13 +122,13 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: unknown) {
     console.error('Tampering detection error:', error);
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to analyze image',
-        details: errorMessage 
+        details: errorMessage
       },
       { status: 500 }
     );
@@ -167,7 +167,7 @@ function transformDetectionResults(results: DetectionResults) {
 
   // Determine if tampered based on thresholds
   const isTampered = deepfake > 0.5 || aiGenerated > 0.5 || quality < 0.4;
-  
+
   // Calculate overall confidence (inverse of tampering probability)
   const tamperingScore = Math.max(deepfake, aiGenerated, 1 - quality);
   const confidence = (1 - tamperingScore) * 100;
@@ -198,12 +198,6 @@ function transformDetectionResults(results: DetectionResults) {
     confidence: Math.max(0, Math.min(100, confidence)),
     anomalies,
     metadata,
-    analysis: {
-      pixelAnalysis: quality * 100,
-      metadataAnalysis: (1 - Math.max(deepfake, aiGenerated)) * 100,
-      compressionAnalysis: quality * 100,
-      overallScore: confidence,
-    },
     aiDetection: {
       deepfake: deepfake,
       aiGenerated: aiGenerated,

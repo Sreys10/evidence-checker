@@ -29,12 +29,7 @@ interface Report {
   confidence: number;
   format: "PDF" | "DOCX" | "HTML";
   imageData?: string;
-  analysis?: {
-    pixelAnalysis: number;
-    metadataAnalysis: number;
-    compressionAnalysis: number;
-    overallScore: number;
-  };
+
   metadata?: {
     camera?: string;
     date?: string;
@@ -47,6 +42,30 @@ interface Report {
     aiGenerated: number;
     quality: number;
     scamProb: number;
+  };
+  faceDetection?: {
+    faces_detected: number;
+    matches: Array<{
+      face_number: number;
+      match_found: boolean;
+      match_info: {
+        person_name: string;
+        distance: number;
+        original_image_base64?: string;
+        metadata?: {
+          name?: string;
+          age?: number;
+          email?: string;
+          phone?: string;
+          notes?: string;
+          added_by?: {
+            name: string;
+            email: string;
+          };
+        };
+      } | null;
+      face_image_base64: string;
+    }>;
   };
   generatedBy?: {
     name: string;
@@ -110,7 +129,7 @@ export default function ReportGeneration() {
     };
 
     window.addEventListener('storage', handleStorageChange);
-    
+
     // Also check periodically for changes (for same-window updates)
     const interval = setInterval(() => {
       loadAvailableEvidence();
@@ -124,11 +143,11 @@ export default function ReportGeneration() {
 
   const saveReports = (newReports: Report[]) => {
     setReports(newReports);
-    
+
     // Get all existing reports from localStorage
     const savedReports = localStorage.getItem('generatedReports');
     let allReports: Report[] = [];
-    
+
     if (savedReports) {
       try {
         allReports = JSON.parse(savedReports);
@@ -136,7 +155,7 @@ export default function ReportGeneration() {
         allReports = [];
       }
     }
-    
+
     // Get current user email
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -161,10 +180,10 @@ export default function ReportGeneration() {
     if (!selectedEvidence || !currentUser) return;
 
     setIsGenerating(true);
-    
+
     // Find the selected evidence from storage
     const evidenceData = availableEvidence.find(e => e.id === selectedEvidence);
-    
+
     if (!evidenceData || !evidenceData.result) {
       setIsGenerating(false);
       return;
@@ -184,10 +203,10 @@ export default function ReportGeneration() {
         confidence,
         format: reportFormat,
         imageData: evidenceData.imageData,
-        analysis: evidenceData.analysis,
         metadata: evidenceData.metadata,
         anomalies: evidenceData.anomalies,
         aiDetection: evidenceData.aiDetection,
+        faceDetection: evidenceData.faceDetection,
         generatedBy: {
           name: currentUser.name,
           email: currentUser.email,
@@ -218,7 +237,6 @@ export default function ReportGeneration() {
       },
       status: report.status,
       confidence: report.confidence,
-      analysis: report.analysis,
       metadata: report.metadata,
       anomalies: report.anomalies,
       aiDetection: report.aiDetection,
@@ -243,7 +261,6 @@ export default function ReportGeneration() {
       },
       status: report.status,
       confidence: report.confidence,
-      analysis: report.analysis,
       metadata: report.metadata,
       anomalies: report.anomalies,
       aiDetection: report.aiDetection,
@@ -277,7 +294,6 @@ export default function ReportGeneration() {
         },
         status: report.status,
         confidence: report.confidence,
-        analysis: report.analysis,
         metadata: report.metadata,
         anomalies: report.anomalies,
       };

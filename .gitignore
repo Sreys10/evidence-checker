@@ -50,3 +50,14 @@ requirements.txt
 Dockerfile
 docker-compose.yml
 .dockerignore
+
+# Face database images - don't push to GitHub
+backend-service/database/*.jpg
+backend-service/database/*.jpeg
+backend-service/database/*.png
+backend-service/database/*.gif
+backend-service/database/*.bmp
+backend-service/database/*.pkl
+backend-service/faiss_index.bin
+backend-service/faiss_metadata.json
+backend-service/database_metadata.json

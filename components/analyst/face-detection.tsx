@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   Settings,
   Image as ImageIcon,
 } from "lucide-react";
+import { saveEvidence, getEvidenceById, type StoredEvidence } from "@/lib/evidence-storage";
 
 interface FaceMatch {
   face_number: number;
@@ -22,6 +23,19 @@ interface FaceMatch {
     identity: string;
     distance: number;
     person_name: string;
+    original_image_base64?: string;
+    metadata?: {
+      name?: string;
+      age?: number;
+      email?: string;
+      phone?: string;
+      notes?: string;
+      added_by?: {
+        name: string;
+        email: string;
+      };
+      added_at?: string;
+    };
   } | null;
   face_image_base64: string;
   error?: string;
@@ -34,19 +48,59 @@ interface DetectionResult {
   error?: string;
 }
 
-export default function FaceDetection() {
+// Helper to convert base64 to file
+const dataURLtoFile = async (dataUrl: string, filename: string): Promise<File> => {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type });
+};
+
+interface FaceDetectionProps {
+  preselectedEvidenceId?: string | null;
+  isEmbedded?: boolean;
+}
+
+export default function FaceDetection({ preselectedEvidenceId, isEmbedded = false }: FaceDetectionProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<DetectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Configuration state
   const [detector, setDetector] = useState("retinaface");
   const [model, setModel] = useState("ArcFace");
   const [threshold, setThreshold] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    const loadPreselected = async () => {
+      if (preselectedEvidenceId) {
+        const { getAllEvidence } = await import('@/lib/evidence-storage');
+        const all = getAllEvidence();
+        const found = all.find((e: StoredEvidence) => e.id === preselectedEvidenceId);
+        if (found && found.imageData) {
+          try {
+            const file = await dataURLtoFile(found.imageData, found.fileName);
+            setSelectedFile(file);
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              setPreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+
+            setError(null);
+            setResult(null);
+          } catch (e) {
+            console.error("Failed to load preselected evidence", e);
+          }
+        }
+      }
+    };
+    loadPreselected();
+  }, [preselectedEvidenceId]);
 
   const handleFileSelect = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -98,6 +152,49 @@ export default function FaceDetection() {
       }
 
       setResult(data);
+
+      // Save face detection results to evidence storage
+      if (data.success && selectedFile) {
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const userId = user?._id || user?.email || 'anonymous';
+
+        // Check if evidence already exists for this image
+        const { getAllEvidence } = await import('@/lib/evidence-storage');
+        const allEvidence = getAllEvidence(userId);
+        let evidence = allEvidence.find((e: StoredEvidence) => e.fileName === selectedFile.name);
+
+        if (!evidence) {
+          // Create new evidence entry
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const preview = e.target?.result as string;
+            const evidenceData: StoredEvidence = {
+              id: Date.now().toString(),
+              fileName: selectedFile.name,
+              imageData: preview,
+              uploadDate: new Date().toISOString(),
+              status: "complete",
+              result: null,
+              size: `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`,
+              type: selectedFile.type,
+              faceDetection: {
+                faces_detected: data.faces_detected || 0,
+                matches: data.matches || []
+              }
+            };
+            saveEvidence(evidenceData, userId);
+          };
+          reader.readAsDataURL(selectedFile);
+        } else {
+          // Update existing evidence with face detection results
+          evidence.faceDetection = {
+            faces_detected: data.faces_detected || 0,
+            matches: data.matches || []
+          };
+          saveEvidence(evidence, userId);
+        }
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
@@ -120,27 +217,29 @@ export default function FaceDetection() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Face Detection & Matching
-              </CardTitle>
-              <CardDescription>
-                Upload an image to detect faces and match them against the database
-              </CardDescription>
+        {!isEmbedded && (
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Face Detection & Matching
+                </CardTitle>
+                <CardDescription>
+                  Upload an image to detect faces and match them against the database
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettings(!showSettings)}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSettings(!showSettings)}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
-          </div>
-        </CardHeader>
+          </CardHeader>
+        )}
         <CardContent className="space-y-4">
           {/* Settings Panel */}
           {showSettings && (
@@ -306,44 +405,96 @@ export default function FaceDetection() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {result.matches.map((match) => (
                         <Card key={match.face_number} className="overflow-hidden">
-                          <div className="relative">
-                            <img
-                              src={match.face_image_base64}
-                              alt={`Face ${match.face_number}`}
-                              className="w-full h-48 object-cover"
-                            />
-                            <Badge
-                              className={`absolute top-2 right-2 ${
-                                match.match_found
+                          <div className="grid grid-cols-2 gap-2 p-2">
+                            {/* Detected Face */}
+                            <div className="relative">
+                              <p className="text-xs text-muted-foreground mb-1 text-center">Detected Face</p>
+                              <img
+                                src={match.face_image_base64}
+                                alt={`Face ${match.face_number}`}
+                                className="w-full h-32 object-cover rounded border"
+                              />
+                            </div>
+                            {/* Original Database Image */}
+                            <div className="relative">
+                              <p className="text-xs text-muted-foreground mb-1 text-center">
+                                {match.match_found ? "Database Match" : "No Match"}
+                              </p>
+                              {match.match_found && match.match_info?.original_image_base64 ? (
+                                <img
+                                  src={match.match_info.original_image_base64}
+                                  alt="Database image"
+                                  className="w-full h-32 object-cover rounded border"
+                                />
+                              ) : (
+                                <div className="w-full h-32 bg-muted rounded border flex items-center justify-center">
+                                  <User className="h-8 w-8 text-muted-foreground" />
+                                </div>
+                              )}
+                              <Badge
+                                className={`absolute top-8 right-2 ${match.match_found
                                   ? "bg-green-500"
                                   : "bg-gray-500"
-                              }`}
-                            >
-                              {match.match_found ? (
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                              ) : (
-                                <XCircle className="h-3 w-3 mr-1" />
-                              )}
-                              {match.match_found ? "Match" : "No Match"}
-                            </Badge>
+                                  }`}
+                              >
+                                {match.match_found ? (
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                )}
+                                {match.match_found ? "Match" : "No Match"}
+                              </Badge>
+                            </div>
                           </div>
                           <CardContent className="p-4">
                             <p className="font-medium mb-2">
                               Face {match.face_number}
                             </p>
                             {match.match_found && match.match_info ? (
-                              <div className="space-y-1 text-sm">
-                                <p>
-                                  <span className="font-medium">Person:</span>{" "}
-                                  {match.match_info.person_name}
-                                </p>
-                                <p>
-                                  <span className="font-medium">Distance:</span>{" "}
-                                  {match.match_info.distance.toFixed(4)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {match.match_info.identity}
-                                </p>
+                              <div className="space-y-2 text-sm">
+                                <div>
+                                  <span className="font-medium">Person ID:</span>{" "}
+                                  <span className="text-primary">{match.match_info.person_name}</span>
+                                </div>
+                                {match.match_info.metadata?.name && (
+                                  <div>
+                                    <span className="font-medium">Name:</span>{" "}
+                                    {match.match_info.metadata.name}
+                                  </div>
+                                )}
+                                {match.match_info.metadata?.age && (
+                                  <div>
+                                    <span className="font-medium">Age:</span>{" "}
+                                    {match.match_info.metadata.age}
+                                  </div>
+                                )}
+                                {match.match_info.metadata?.email && (
+                                  <div>
+                                    <span className="font-medium">Email:</span>{" "}
+                                    {match.match_info.metadata.email}
+                                  </div>
+                                )}
+                                {match.match_info.metadata?.phone && (
+                                  <div>
+                                    <span className="font-medium">Phone:</span>{" "}
+                                    {match.match_info.metadata.phone}
+                                  </div>
+                                )}
+                                <div className="pt-2 border-t">
+                                  <p className="text-xs text-muted-foreground">
+                                    <span className="font-medium">Similarity:</span>{" "}
+                                    {((1 - match.match_info.distance) * 100).toFixed(2)}%
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    <span className="font-medium">Distance:</span>{" "}
+                                    {match.match_info.distance.toFixed(4)}
+                                  </p>
+                                </div>
+                                {match.match_info.metadata?.added_by && (
+                                  <p className="text-xs text-muted-foreground pt-2 border-t">
+                                    Added by: {match.match_info.metadata.added_by.name}
+                                  </p>
+                                )}
                               </div>
                             ) : (
                               <p className="text-sm text-muted-foreground">
