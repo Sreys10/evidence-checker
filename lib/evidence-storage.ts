@@ -318,7 +318,11 @@ export function getUserStats(userId?: string): {
     const savedReports = localStorage.getItem('generatedReports');
     if (savedReports) {
       const reports = JSON.parse(savedReports);
-      const _currentUserId = userId || getCurrentUserId();
+      // const _currentUserId = userId || getCurrentUserId(); // check if this is needed for filter? 
+      // It is used in filter callback line 326 check?
+      // "return r.generatedBy?.email === user.email;" -> user comes from localStorage inside callback. 
+      // _currentUserId is NOT used in the callback.
+      // So remove it.
       reportsGenerated = reports.filter((r: { generatedBy?: { email?: string } }) => {
         try {
           const userStr = localStorage.getItem('user');

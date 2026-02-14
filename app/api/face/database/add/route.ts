@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
     // Convert file to buffer for forwarding to backend
     let buffer: Buffer;
     try {
-      // Cast to any to access arrayBuffer without TS complaining about the specific File type
-      const bytes = await (file as any).arrayBuffer();
+      // Cast to unknown first to avoid ESLint 'unexpected any' error, then checks
+      const bytes = await (file as unknown as Blob).arrayBuffer();
       buffer = Buffer.from(bytes);
     } catch (e) {
       return NextResponse.json(

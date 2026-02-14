@@ -13,7 +13,7 @@ const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_EVIDENCE_CONTRACT_ADDRESS || "0
 
 declare global {
     interface Window {
-        ethereum: any;
+        ethereum: unknown;
     }
 }
 
@@ -23,7 +23,7 @@ export async function connectWallet() {
     }
 
     try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
+        const provider = new ethers.BrowserProvider(window.ethereum as any);
         const accounts = await provider.send("eth_requestAccounts", []);
         return accounts[0];
     } catch (error) {
@@ -43,7 +43,7 @@ export async function registerEvidenceOnBlockchain(
     }
 
     try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
+        const provider = new ethers.BrowserProvider(window.ethereum as any);
         const signer = await provider.getSigner();
 
         // Mock Contract for now if address is dummy
