@@ -4,13 +4,16 @@ const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { person_id: string } }
+  { params }: { params: Promise<{ person_id: string }> }
 ) {
   try {
-    const personId = params.person_id;
+    const personId = (await params).person_id;
 
     const response = await fetch(`${BACKEND_SERVICE_URL}/face/database/delete/${personId}`, {
       method: 'DELETE',
+      headers: {
+        'X-API-Key': process.env.EVI_CHECK_API_KEY || 'default-api-key-replace-me'
+      }
     });
 
     const data = await response.json();

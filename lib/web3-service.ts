@@ -1,68 +1,120 @@
-
 import { ethers } from "ethers";
 
-// ABI for EvidenceRegistry
-const EVIDENCE_REGISTRY_ABI = [
-    "function registerEvidence(string _ipfsHash, string _fileName, string _fileType, string _evidenceId) public",
-    "event EvidenceRegistered(address indexed uploader, string ipfsHash, string fileName, uint256 timestamp)",
-    "function isEvidenceRegistered(string _ipfsHash) public view returns (bool)"
+// ABI for ImageStorage contract (from HrishiBanait/ipfs-blockchain-Image-Storage-System)
+const IMAGE_STORAGE_ABI = [
+  "function storeEvidence(string memory _ipfsHash, string memory _analystId, uint256 _confidenceScore, string memory _status) public",
+  "function getEvidence(address user) external view returns (tuple(string ipfsHash, string analystId, uint256 confidenceScore, string status, uint256 timestamp)[] memory)",
+  "function storeHash(string memory _hash) public",
+  "function getHashes(address user) external view returns (string[] memory)",
+  "event EvidenceStored(address indexed user, string ipfsHash, string analystId, uint256 confidenceScore, string status, uint256 timestamp)",
 ];
 
-// Contract Address - User needs to deploy and set this
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_EVIDENCE_CONTRACT_ADDRESS || "0xYourContractAddressHere";
+// Contract address – populated automatically by scripts/deploy.js into .env.local
+const CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_IMAGE_STORAGE_ADDRESS || "0xNotDeployedYet";
 
 declare global {
-    interface Window {
-        ethereum: unknown;
-    }
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ethereum: any;
+  }
 }
 
-export async function connectWallet() {
-    if (typeof window.ethereum === "undefined") {
-        throw new Error("Metamask is not installed!");
-    }
+/** Requests MetaMask account access and returns the connected address. */
+export async function connectWallet(): Promise<string> {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
+    throw new Error("MetaMask is not installed!");
+  }
 
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const provider = new ethers.BrowserProvider(window.ethereum as any);
-        const accounts = await provider.send("eth_requestAccounts", []);
-        return accounts[0];
-    } catch (error) {
-        console.error("Failed to connect wallet:", error);
-        throw error;
-    }
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const accounts: string[] = await provider.send("eth_requestAccounts", []);
+  return accounts[0];
 }
 
-export async function registerEvidenceOnBlockchain(
-    ipfsHash: string,
-    fileName: string,
-    fileType: string,
-    evidenceId: string
-) {
-    if (typeof window.ethereum === "undefined") {
-        throw new Error("Metamask is not installed!");
-    }
+/**
+ * Stores enriched evidence data on the ImageStorage smart contract.
+ */
+export async function storeEvidenceOnBlockchain(
+  ipfsHash: string,
+  analystId: string,
+  confidenceScore: number,
+  status: string
+): Promise<ethers.TransactionReceipt> {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
+    throw new Error("MetaMask is not installed!");
+  }
 
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const provider = new ethers.BrowserProvider(window.ethereum as any);
-        const signer = await provider.getSigner();
+  if (CONTRACT_ADDRESS === "0xNotDeployedYet") {
+    throw new Error("ImageStorage contract not deployed.");
+  }
 
-        // Mock Contract for now if address is dummy
-        if (CONTRACT_ADDRESS === "0xYourContractAddressHere") {
-            console.warn("Using Mock Blockchain Transaction (Contract not deployed)");
-            // Simulate delay
-            await new Promise(r => setTimeout(r, 2000));
-            return { hash: "0xMockTxHash" + Math.random().toString(36).substring(2) };
-        }
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, signer);
 
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, EVIDENCE_REGISTRY_ABI, signer);
+  // Convert confidence to integer if it's a float
+  const score = Math.round(confidenceScore);
 
-        const tx = await contract.registerEvidence(ipfsHash, fileName, fileType, evidenceId);
-        await tx.wait(); // Wait for confirmation
-        return tx;
-    } catch (error) {
-        console.error("Blockchain Registration Error:", error);
-        throw error;
-    }
+  const tx: ethers.TransactionResponse = await contract.storeEvidence(
+    ipfsHash,
+    analystId,
+    score,
+    status
+  );
+  const receipt = await tx.wait();
+  if (!receipt) throw new Error("Transaction failed – no receipt returned.");
+  return receipt;
+}
+
+/**
+ * Stores an IPFS CID on the ImageStorage smart contract (Legacy wrapper).
+ */
+export async function storeHashOnBlockchain(
+  ipfsHash: string
+): Promise<ethers.TransactionReceipt> {
+  return storeEvidenceOnBlockchain(ipfsHash, "legacy", 0, "unknown");
+}
+
+/**
+ * Retrieves all enriched evidence records stored on-chain for a user.
+ */
+export async function getEvidenceFromBlockchain(
+  userAddress: string
+): Promise<any[]> {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
+    throw new Error("MetaMask is not installed!");
+  }
+
+  if (CONTRACT_ADDRESS === "0xNotDeployedYet") return [];
+
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
+
+  const records = await contract.getEvidence(userAddress);
+  return records.map((r: any) => ({
+    ipfsHash: r.ipfsHash,
+    analystId: r.analystId,
+    confidenceScore: Number(r.confidenceScore),
+    status: r.status,
+    timestamp: Number(r.timestamp)
+  }));
+}
+
+/**
+ * Retrieves all IPFS CIDs stored on-chain for a given wallet address.
+ */
+export async function getHashesFromBlockchain(
+  userAddress: string
+): Promise<string[]> {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
+    throw new Error("MetaMask is not installed!");
+  }
+
+  if (CONTRACT_ADDRESS === "0xNotDeployedYet") return [];
+
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
+
+  const hashes: string[] = await contract.getHashes(userAddress);
+  return hashes;
 }

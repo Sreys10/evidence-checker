@@ -42,9 +42,10 @@ export async function POST(request: NextRequest) {
       const backendUrl = `${BACKEND_SERVICE_URL}/face/detect-and-search`;
       
       // Create FormData for backend request
+      // Create FormData for backend request
       const formData = new FormData();
       const blob = new Blob([buffer], { type: file.type });
-      formData.append('image', blob, file.name);
+      formData.append('image', blob, file.name || 'image.jpg');
       formData.append('detector', detector);
       formData.append('model', model);
       formData.append('threshold', threshold);
@@ -54,6 +55,9 @@ export async function POST(request: NextRequest) {
       const backendResponse = await fetch(backendUrl, {
         method: 'POST',
         body: formData,
+        headers: {
+          'X-API-Key': process.env.EVI_CHECK_API_KEY || 'default-api-key-replace-me'
+        }
       });
 
       const data = await backendResponse.json();

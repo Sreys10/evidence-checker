@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       const response = await axios.post(backendUrl, FormDataInstance, {
         headers: {
           ...FormDataInstance.getHeaders(),
+          'X-API-Key': process.env.EVI_CHECK_API_KEY || 'default-api-key-replace-me',
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,

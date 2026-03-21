@@ -1,17 +1,18 @@
-// Centralized evidence storage utility using localStorage
+// Centralized mapping utility using MongoDB backend APIs instead of localStorage
 
 export interface StoredCase {
-  id: string;
+  _id?: string;
   caseNumber: string;
   caseName: string;
   createdDate: string;
   userId?: string;
+  id?: string; // For backward compatibility
 }
 
 export interface StoredEvidence {
-  id: string;
+  _id?: string;
   fileName: string;
-  imageData: string; // Base64 data URL
+  imageData: string;
   uploadDate: string;
   analyzedDate?: string;
   status: "pending" | "analyzing" | "complete";
@@ -19,336 +20,214 @@ export interface StoredEvidence {
   confidence?: number | null;
   size: string;
   type: string;
-  // Case management
   caseId?: string;
   caseNumber?: string;
   caseName?: string;
   evidenceName?: string;
-
-  metadata?: {
-    camera?: string;
-    date?: string;
-    location?: string;
-    software?: string;
-  };
+  metadata?: any;
   anomalies?: string[];
-  aiDetection?: {
-    deepfake: number;
-    aiGenerated: number;
-    quality: number;
-    scamProb: number;
-  };
+  aiDetection?: any;
   blockchainHash?: string | null;
   ipfsHash?: string | null;
   reportGenerated?: boolean;
-  faceDetection?: {
-    faces_detected: number;
-    matches: Array<{
-      face_number: number;
-      match_found: boolean;
-      match_info: {
-        person_name: string;
-        distance: number;
-        original_image_base64?: string;
-        metadata?: {
-          name?: string;
-          age?: number;
-          email?: string;
-          phone?: string;
-          notes?: string;
-          added_by?: {
-            name: string;
-            email: string;
-          };
-        };
-      } | null;
-      face_image_base64: string;
-    }>;
-  };
+  faceDetection?: any;
+  id?: string; // For backward compatibility
 }
 
-const STORAGE_KEY_PREFIX = 'evidenceStorage_';
-const CASES_KEY_PREFIX = 'casesStorage_';
+// ==== EVIDENCE MANAGEMENT ====
 
-/**
- * Get storage key for a specific user
- */
-function getStorageKey(userId?: string): string {
-  if (typeof window === 'undefined') return '';
-
-  if (!userId) {
-    // Try to get user from localStorage
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        userId = user._id || user.email || 'anonymous';
-      } else {
-        userId = 'anonymous';
-      }
-    } catch {
-      userId = 'anonymous';
-    }
-  }
-
-  return `${STORAGE_KEY_PREFIX}${userId}`;
-}
-
-/**
- * Get current user ID
- */
-function getCurrentUserId(): string {
-  if (typeof window === 'undefined') return 'anonymous';
-
+export async function getAllEvidence(userId?: string): Promise<StoredEvidence[]> {
   try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      return user._id || user.email || 'anonymous';
-    }
-  } catch {
-    // Ignore errors
-  }
-
-  return 'anonymous';
-}
-
-/**
- * Get all stored evidence for current user
- */
-export function getAllEvidence(userId?: string): StoredEvidence[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const storageKey = getStorageKey(userId);
-    const stored = localStorage.getItem(storageKey);
-    return stored ? JSON.parse(stored) : [];
+    const res = await fetch('/api/evidence');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.evidence.map((e: any) => ({ ...e, id: e._id }));
   } catch (error) {
-    console.error('Error reading evidence from storage:', error);
+    console.error('Error fetching evidence:', error);
     return [];
   }
 }
 
-/**
- * Save evidence to storage
- */
-export function saveEvidence(evidence: StoredEvidence, userId?: string): void {
-  if (typeof window === 'undefined') return;
-
+export async function saveEvidence(evidence: StoredEvidence, userId?: string): Promise<StoredEvidence | null> {
   try {
-    const storageKey = getStorageKey(userId);
-    const allEvidence = getAllEvidence(userId);
-    const existingIndex = allEvidence.findIndex(e => e.id === evidence.id);
-
-    if (existingIndex >= 0) {
-      // Update existing evidence
-      allEvidence[existingIndex] = evidence;
+    const isUpdate = evidence.id || evidence._id;
+    let res: Response;
+    if (isUpdate) {
+      res = await fetch(`/api/evidence/${evidence.id || evidence._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(evidence),
+      });
     } else {
-      // Add new evidence
-      allEvidence.push(evidence);
+      res = await fetch('/api/evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(evidence),
+      });
     }
 
-    localStorage.setItem(storageKey, JSON.stringify(allEvidence));
+    if (res.ok) {
+      const data = await res.json();
+      const saved = data.evidence;
+      return { ...saved, id: saved._id };
+    }
+    return null;
   } catch (error) {
-    console.error('Error saving evidence to storage:', error);
+    console.error('Error saving evidence:', error);
+    return null;
   }
 }
 
-/**
- * Get evidence by ID
- */
-export function getEvidenceById(id: string, userId?: string): StoredEvidence | null {
-  const allEvidence = getAllEvidence(userId);
-  return allEvidence.find(e => e.id === id) || null;
-}
-
-/**
- * Delete evidence by ID
- */
-export function deleteEvidence(id: string, userId?: string): void {
-  if (typeof window === 'undefined') return;
-
+export async function getEvidenceById(id: string, userId?: string): Promise<StoredEvidence | null> {
   try {
-    const storageKey = getStorageKey(userId);
-    const allEvidence = getAllEvidence(userId);
-    const filtered = allEvidence.filter(e => e.id !== id);
-    localStorage.setItem(storageKey, JSON.stringify(filtered));
+    const res = await fetch(`/api/evidence/${id}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { ...data.evidence, id: data.evidence._id };
   } catch (error) {
-    console.error('Error deleting evidence from storage:', error);
+    console.error('Error fetching evidence by id:', error);
+    return null;
   }
 }
 
-/**
- * Rename evidence by ID
- */
-export function renameEvidence(id: string, newFileName: string, userId?: string): boolean {
-  if (typeof window === 'undefined') return false;
-
+export async function deleteEvidence(id: string, userId?: string): Promise<void> {
   try {
-    const evidence = getEvidenceById(id, userId);
-    if (!evidence) return false;
+    await fetch(`/api/evidence/${id}`, { method: 'DELETE' });
+  } catch (error) {
+    console.error('Error deleting evidence:', error);
+  }
+}
 
-    evidence.fileName = newFileName;
-    saveEvidence(evidence, userId);
-    return true;
+export async function renameEvidence(id: string, newName: string, userId?: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/evidence/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ evidenceName: newName }),
+    });
+    return res.ok;
   } catch (error) {
     console.error('Error renaming evidence:', error);
     return false;
   }
 }
 
-/**
- * Update evidence analysis results
- */
-export function updateEvidenceAnalysis(
+export async function updateEvidenceAnalysis(
   id: string,
-  analysis: {
-    isTampered: boolean;
-    confidence: number;
-    anomalies: string[];
-    metadata?: Record<string, unknown>;
-    aiDetection?: {
-      deepfake: number;
-      aiGenerated: number;
-      quality: number;
-      scamProb: number;
-      rawResults?: Record<string, unknown>;
-    };
-  },
+  analysis: any,
   userId?: string
-): void {
-  const evidence = getEvidenceById(id, userId);
-  if (!evidence) return;
-
-  evidence.analyzedDate = new Date().toISOString();
-  evidence.status = "complete";
-  evidence.result = analysis.isTampered ? "tampered" : "authentic";
-  evidence.confidence = analysis.confidence;
-  evidence.metadata = analysis.metadata || evidence.metadata;
-  evidence.anomalies = analysis.anomalies;
-  evidence.aiDetection = analysis.aiDetection;
-
-  saveEvidence(evidence, userId);
-}
-
-/**
- * Clear all evidence for current user (for testing/reset)
- */
-export function clearAllEvidence(userId?: string): void {
-  if (typeof window === 'undefined') return;
-  const storageKey = getStorageKey(userId);
-  localStorage.removeItem(storageKey);
-}
-
-// ---- CASE MANAGEMENT ----
-
-function getCasesKey(userId?: string): string {
-  if (typeof window === 'undefined') return '';
-  if (!userId) userId = getCurrentUserId();
-  return `${CASES_KEY_PREFIX}${userId}`;
-}
-
-export function getAllCases(userId?: string): StoredCase[] {
-  if (typeof window === 'undefined') return [];
+): Promise<void> {
   try {
-    const key = getCasesKey(userId);
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : [];
+    const updates = {
+      analyzedDate: new Date().toISOString(),
+      status: "complete",
+      result: analysis.isTampered ? "tampered" : "authentic",
+      confidence: analysis.confidence,
+      metadata: analysis.metadata,
+      anomalies: analysis.anomalies,
+      aiDetection: analysis.aiDetection,
+    };
+    await fetch(`/api/evidence/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
   } catch (error) {
-    console.error('Error reading cases:', error);
+    console.error('Error updating analysis:', error);
+  }
+}
+
+export async function clearAllEvidence(userId?: string): Promise<void> {
+  console.warn("clearAllEvidence is disabled in database mode");
+}
+
+// ==== CASE MANAGEMENT ====
+
+export async function getAllCases(userId?: string): Promise<StoredCase[]> {
+  try {
+    const res = await fetch('/api/cases');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.cases.map((c: any) => ({ ...c, id: c._id }));
+  } catch (error) {
+    console.error('Error fetchings cases:', error);
     return [];
   }
 }
 
-export function saveCase(c: StoredCase, userId?: string): void {
-  if (typeof window === 'undefined') return;
+export async function saveCase(c: StoredCase, userId?: string): Promise<void> {
   try {
-    const key = getCasesKey(userId);
-    const all = getAllCases(userId);
-    const idx = all.findIndex(x => x.id === c.id);
-    if (idx >= 0) all[idx] = c; else all.push(c);
-    localStorage.setItem(key, JSON.stringify(all));
+    await fetch('/api/cases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(c),
+    });
   } catch (error) {
     console.error('Error saving case:', error);
   }
 }
 
-export function getCaseById(id: string, userId?: string): StoredCase | null {
-  return getAllCases(userId).find(c => c.id === id) || null;
+export async function getCaseById(id: string, userId?: string): Promise<StoredCase | null> {
+  try {
+    const all = await getAllCases(userId);
+    return all.find(c => c.id === id) || null;
+  } catch (error) {
+    return null;
+  }
 }
 
-export function deleteCase(id: string, userId?: string): void {
-  if (typeof window === 'undefined') return;
+export async function deleteCase(id: string, userId?: string): Promise<void> {
   try {
-    const key = getCasesKey(userId);
-    const all = getAllCases(userId).filter(c => c.id !== id);
-    localStorage.setItem(key, JSON.stringify(all));
-    // Also delete evidence belonging to this case
-    const storageKey = getStorageKey(userId);
-    const allEvidence = getAllEvidence(userId).filter(e => e.caseId !== id);
-    localStorage.setItem(storageKey, JSON.stringify(allEvidence));
+    await fetch(`/api/cases/${id}`, { method: 'DELETE' });
   } catch (error) {
     console.error('Error deleting case:', error);
   }
 }
 
-export function getEvidenceByCase(caseId: string, userId?: string): StoredEvidence[] {
-  return getAllEvidence(userId).filter(e => e.caseId === caseId);
+export async function getEvidenceByCase(caseId: string, userId?: string): Promise<StoredEvidence[]> {
+  try {
+    const all = await getAllEvidence(userId);
+    return all.filter(e => e.caseId === caseId);
+  } catch (error) {
+    return [];
+  }
 }
 
-/**
- * Get statistics for current user
- */
-export function getUserStats(userId?: string): {
+export async function getUserStats(userId?: string): Promise<{
   totalEvidence: number;
   totalCases: number;
   verified: number;
   tampered: number;
   reportsGenerated: number;
   onBlockchain: number;
-} {
-  const allEvidence = getAllEvidence(userId);
-  const allCases = getAllCases(userId);
-  const verified = allEvidence.filter(e => e.status === "complete" && e.result === "authentic").length;
-  const tampered = allEvidence.filter(e => e.status === "complete" && e.result === "tampered").length;
-
-  // Count reports generated
-  let reportsGenerated = 0;
+}> {
   try {
-    const savedReports = localStorage.getItem('generatedReports');
-    if (savedReports) {
-      const reports = JSON.parse(savedReports);
-      // const _currentUserId = userId || getCurrentUserId(); // check if this is needed for filter? 
-      // It is used in filter callback line 326 check?
-      // "return r.generatedBy?.email === user.email;" -> user comes from localStorage inside callback. 
-      // _currentUserId is NOT used in the callback.
-      // So remove it.
-      reportsGenerated = reports.filter((r: { generatedBy?: { email?: string } }) => {
-        try {
-          const userStr = localStorage.getItem('user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            return r.generatedBy?.email === user.email;
-          }
-        } catch {
-          // Ignore
-        }
-        return false;
-      }).length;
-    }
-  } catch {
-    // Ignore
+    const [allEvidence, allCases] = await Promise.all([
+      getAllEvidence(userId),
+      getAllCases(userId)
+    ]);
+
+    const verified = allEvidence.filter(e => e.status === "complete" && e.result === "authentic").length;
+    const tampered = allEvidence.filter(e => e.status === "complete" && e.result === "tampered").length;
+    const onBlockchain = allEvidence.filter(e => e.blockchainHash).length;
+    const reportsGenerated = allEvidence.filter(e => e.reportGenerated).length;
+
+    return {
+      totalEvidence: allEvidence.length,
+      totalCases: allCases.length,
+      verified,
+      tampered,
+      reportsGenerated,
+      onBlockchain,
+    };
+  } catch (error) {
+    return {
+      totalEvidence: 0,
+      totalCases: 0,
+      verified: 0,
+      tampered: 0,
+      reportsGenerated: 0,
+      onBlockchain: 0,
+    };
   }
-
-  const onBlockchain = allEvidence.filter(e => e.blockchainHash).length;
-
-  return {
-    totalEvidence: allEvidence.length,
-    totalCases: allCases.length,
-    verified,
-    tampered,
-    reportsGenerated,
-    onBlockchain,
-  };
 }
-

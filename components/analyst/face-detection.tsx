@@ -14,7 +14,7 @@ import {
   Settings,
   Image as ImageIcon,
 } from "lucide-react";
-import { saveEvidence, getEvidenceById, type StoredEvidence } from "@/lib/evidence-storage";
+import { saveEvidence, getEvidenceById, getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 
 interface FaceMatch {
   face_number: number;
@@ -77,9 +77,8 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
   useEffect(() => {
     const loadPreselected = async () => {
       if (preselectedEvidenceId) {
-        const { getAllEvidence } = await import('@/lib/evidence-storage');
-        const all = getAllEvidence();
-        const found = all.find((e: StoredEvidence) => e.id === preselectedEvidenceId);
+        const all = await getAllEvidence();
+        const found = all.find((e: StoredEvidence) => (e.id || (e as any)._id) === preselectedEvidenceId);
         if (found && found.imageData) {
           try {
             const file = await dataURLtoFile(found.imageData, found.fileName);
@@ -155,22 +154,16 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
 
       // Save face detection results to evidence storage
       if (data.success && selectedFile) {
-        const userStr = localStorage.getItem('user');
-        const user = userStr ? JSON.parse(userStr) : null;
-        const userId = user?._id || user?.email || 'anonymous';
-
         // Check if evidence already exists for this image
-        const { getAllEvidence } = await import('@/lib/evidence-storage');
-        const allEvidence = getAllEvidence(userId);
+        const allEvidence = await getAllEvidence();
         const evidence = allEvidence.find((e: StoredEvidence) => e.fileName === selectedFile.name);
 
         if (!evidence) {
           // Create new evidence entry
           const reader = new FileReader();
-          reader.onload = (e) => {
+          reader.onload = async (e) => {
             const preview = e.target?.result as string;
             const evidenceData: StoredEvidence = {
-              id: Date.now().toString(),
               fileName: selectedFile.name,
               imageData: preview,
               uploadDate: new Date().toISOString(),
@@ -183,7 +176,7 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
                 matches: data.matches || []
               }
             };
-            saveEvidence(evidenceData, userId);
+            await saveEvidence(evidenceData);
           };
           reader.readAsDataURL(selectedFile);
         } else {
@@ -192,7 +185,7 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
             faces_detected: data.faces_detected || 0,
             matches: data.matches || []
           };
-          saveEvidence(evidence, userId);
+          await saveEvidence(evidence);
         }
       }
     } catch (err) {

@@ -4,16 +4,17 @@ const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { person_id: string } }
+  { params }: { params: Promise<{ person_id: string }> }
 ) {
   try {
     const body = await request.json();
-    const personId = params.person_id;
+    const personId = (await params).person_id;
 
     const response = await fetch(`${BACKEND_SERVICE_URL}/face/database/update/${personId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': process.env.EVI_CHECK_API_KEY || 'default-api-key-replace-me'
       },
       body: JSON.stringify(body),
     });

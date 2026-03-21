@@ -70,23 +70,12 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
     loadRecords();
   }, []);
 
-  const loadRecords = () => {
-    const storedEvidence = getAllEvidence();
+  const loadRecords = async () => {
+    const storedEvidence = await getAllEvidence();
 
     const evidenceRecords: EvidenceRecord[] = storedEvidence.map((evidence) => {
-      const savedReports = localStorage.getItem('generatedReports');
-      let reportGenerated = false;
-      if (savedReports) {
-        try {
-          const reports = JSON.parse(savedReports);
-          reportGenerated = reports.some((r: { evidenceName?: string }) => r.evidenceName === evidence.fileName);
-        } catch (e) {
-          console.error('Error parsing reports:', e);
-        }
-      }
-
       return {
-        id: evidence.id,
+        id: evidence.id || (evidence as any)._id,
         fileName: evidence.fileName,
         evidenceName: evidence.evidenceName,
         uploadDate: new Date(evidence.uploadDate).toLocaleString(),
@@ -97,7 +86,7 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
         size: evidence.size,
         type: evidence.type,
         blockchainHash: evidence.blockchainHash || null,
-        reportGenerated,
+        reportGenerated: !!evidence.reportGenerated,
         caseId: evidence.caseId,
         caseNumber: evidence.caseNumber,
         caseName: evidence.caseName,
@@ -113,10 +102,10 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
     setRecords(evidenceRecords);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this evidence record?')) {
-      deleteEvidence(id);
-      loadRecords();
+      await deleteEvidence(id);
+      await loadRecords();
     }
   };
 
@@ -130,11 +119,11 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
     setEditValue("");
   };
 
-  const handleRenameSave = (id: string) => {
+  const handleRenameSave = async (id: string) => {
     if (editValue.trim() && editValue.trim() !== "") {
-      const success = renameEvidence(id, editValue.trim());
+      const success = await renameEvidence(id, editValue.trim());
       if (success) {
-        loadRecords();
+        await loadRecords();
         setEditingId(null);
         setEditValue("");
       } else {

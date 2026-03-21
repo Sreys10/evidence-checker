@@ -272,8 +272,6 @@ export default function LoginPage() {
       </option>
       <option value="admin">Admin</option>
       <option value="analyst">Analyst</option>
-      <option value="verifier">Verifier</option>
-      <option value="guest">Guest</option>
     </select>
   </motion.div>
 </motion.div>

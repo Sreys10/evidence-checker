@@ -57,13 +57,33 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = updatedUser;
 
-    return NextResponse.json(
+    // Issue Secure JWT Cookie
+    const { signJwt } = await import('@/lib/jwt');
+    const token = await signJwt({ 
+      id: updatedUser._id?.toString() || '',
+      email: updatedUser.email,
+      userType: updatedUser.userType
+    });
+
+    const response = NextResponse.json(
       {
         message: 'Login successful',
         user: userWithoutPassword,
       },
       { status: 200 }
     );
+    
+    response.cookies.set({
+      name: 'evicheck_session',
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 // 1 day
+    });
+
+    return response;
   } catch (error: unknown) {
     console.error('Login error:', error);
     

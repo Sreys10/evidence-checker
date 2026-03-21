@@ -83,8 +83,8 @@ export default function ReportGeneration() {
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
   const [availableEvidence, setAvailableEvidence] = useState<StoredEvidence[]>([]);
 
-  const loadAvailableEvidence = () => {
-    const evidence = getAllEvidence();
+  const loadAvailableEvidence = async () => {
+    const evidence = await getAllEvidence();
     // Only show evidence that has been analyzed (status: complete)
     const analyzedEvidence = evidence.filter(e => e.status === "complete");
     setAvailableEvidence(analyzedEvidence);
@@ -133,7 +133,7 @@ export default function ReportGeneration() {
     // Also check periodically for changes (for same-window updates)
     const interval = setInterval(() => {
       loadAvailableEvidence();
-    }, 2000);
+    }, 5000); // Increased interval to avoid spamming API too much
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);

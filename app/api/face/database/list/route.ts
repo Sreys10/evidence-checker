@@ -6,6 +6,9 @@ export async function GET(_request: NextRequest) {
   try {
     const response = await fetch(`${BACKEND_SERVICE_URL}/face/database/list`, {
       method: 'GET',
+      headers: {
+        'X-API-Key': process.env.EVI_CHECK_API_KEY || 'default-api-key-replace-me'
+      }
     });
 
     const data = await response.json();

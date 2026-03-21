@@ -48,6 +48,16 @@ const Hero = () => {
                 Get Started <ArrowUpRight className="h-5! w-5!" />
               </Link>
             </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="w-full sm:w-auto rounded-full text-base border-primary/20 hover:bg-primary/5"
+              asChild
+            >
+              <Link href="/analyst">
+                Quick Analysis
+              </Link>
+            </Button>
           </div>
         </div>
 

@@ -7,6 +7,7 @@ export interface User {
   email: string;
   password: string;
   userType: 'admin' | 'analyst' | 'verifier' | 'guest';
+  profileImage?: string;
   createdAt?: Date;
   updatedAt?: Date;
   lastLogin?: Date;
@@ -58,6 +59,31 @@ export async function updateLastLogin(email: string): Promise<void> {
     { email },
     { $set: { lastLogin: new Date(), updatedAt: new Date() } }
   );
+}
+
+export async function updateUser(email: string, updates: Partial<Omit<User, '_id' | 'email' | 'password'>>): Promise<void> {
+  const db = await getDatabase();
+  const usersCollection = db.collection<User>('users');
+  await usersCollection.updateOne(
+    { email },
+    { 
+      $set: { 
+        ...updates, 
+        updatedAt: new Date() 
+      } 
+    }
+  );
+}
+
+export async function findUserById(id: string): Promise<User | null> {
+  const { ObjectId } = await import('mongodb');
+  const db = await getDatabase();
+  const usersCollection = db.collection<User>('users');
+  try {
+    return await usersCollection.findOne({ _id: new ObjectId(id) as any });
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function getAllUsers(): Promise<Omit<User, 'password'>[]> {

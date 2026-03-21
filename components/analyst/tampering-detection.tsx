@@ -49,9 +49,16 @@ const dataURLtoFile = async (dataUrl: string, filename: string): Promise<File> =
 interface TamperingDetectionProps {
   preselectedEvidenceId?: string | null;
   isEmbedded?: boolean;
+  autoStart?: boolean;
+  onAnalysisStarted?: () => void;
 }
 
-export default function TamperingDetection({ preselectedEvidenceId, isEmbedded = false }: TamperingDetectionProps) {
+export default function TamperingDetection({ 
+  preselectedEvidenceId, 
+  isEmbedded = false,
+  autoStart = false,
+  onAnalysisStarted
+}: TamperingDetectionProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<DetectionResult[]>([]);
@@ -60,19 +67,23 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
   // Load evidence from storage on mount
   useEffect(() => {
     loadEvidenceFromStorage();
-    loadEvidenceFromStorage();
   }, []);
 
   useEffect(() => {
     const loadPreselected = async () => {
       if (preselectedEvidenceId) {
-        const all = getAllEvidence();
-        const found = all.find(e => e.id === preselectedEvidenceId);
+        const all = await getAllEvidence();
+        const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
         if (found && found.imageData) {
           try {
             const file = await dataURLtoFile(found.imageData, found.fileName);
             setSelectedFile(file);
-            // Optionally auto-start analysis? Maybe not, let user confirm.
+            
+            // Auto-start analysis if requested and not already analyzing
+            if (autoStart && !isAnalyzing) {
+              if (onAnalysisStarted) onAnalysisStarted();
+              startAnalysis(file);
+            }
           } catch (e) {
             console.error("Failed to load preselected evidence", e);
           }
@@ -80,14 +91,14 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
       }
     };
     loadPreselected();
-  }, [preselectedEvidenceId]);
+  }, [preselectedEvidenceId, autoStart]);
 
-  const loadEvidenceFromStorage = () => {
-    const storedEvidence = getAllEvidence();
+  const loadEvidenceFromStorage = async () => {
+    const storedEvidence = await getAllEvidence();
     const analyzedEvidence = storedEvidence.filter(e => e.status === "complete");
 
     const detectionResults: DetectionResult[] = analyzedEvidence.map(evidence => ({
-      id: evidence.id,
+      id: evidence.id || (evidence as any)._id,
       fileName: evidence.fileName,
       imagePreview: evidence.imageData,
       status: "complete" as const,
@@ -111,8 +122,9 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
     }
   };
 
-  const startAnalysis = async () => {
-    if (!selectedFile) return;
+  const startAnalysis = async (fileToAnalyze?: File) => {
+    const file = fileToAnalyze || selectedFile;
+    if (!file) return;
 
     setIsAnalyzing(true);
     const reader = new FileReader();
@@ -120,7 +132,7 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
       const preview = e.target?.result as string;
       const newAnalysis: DetectionResult = {
         id: Date.now().toString(),
-        fileName: selectedFile.name,
+        fileName: file.name,
         imagePreview: preview,
         status: "analyzing",
         result: null,
@@ -131,21 +143,22 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
 
       try {
         // First, save the evidence to storage
-        const evidenceId = newAnalysis.id;
         const evidenceData: StoredEvidence = {
-          id: evidenceId,
-          fileName: selectedFile.name,
+          fileName: file.name,
           imageData: preview,
           uploadDate: new Date().toISOString(),
           status: "analyzing",
-          size: `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`,
-          type: selectedFile.type,
+          size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+          type: file.type,
         };
-        saveEvidence(evidenceData);
+        // Note: saveEvidence in MongoDB-backed version returns a promise
+        // and provides the saved evidence object including its _id
+        const savedResult = await saveEvidence(evidenceData);
+        const evidenceId = savedResult?.id || savedResult?._id || newAnalysis.id;
 
         // Create FormData to send the image
         const formData = new FormData();
-        formData.append('image', selectedFile);
+        formData.append('image', file);
 
         // Call the API
         const response = await fetch('/api/detect-tampering', {
@@ -174,7 +187,7 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
           };
 
           // Update evidence in storage with analysis results
-          updateEvidenceAnalysis(evidenceId, {
+          await updateEvidenceAnalysis(evidenceId as string, {
             isTampered: data.result.isTampered,
             confidence: data.result.confidence,
             anomalies: data.result.anomalies || [],
@@ -220,7 +233,7 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
         setSelectedFile(null);
       }
     };
-    reader.readAsDataURL(selectedFile);
+    reader.readAsDataURL(file);
   };
 
   // Placeholder for handleDetectAndSearch, assuming it will be defined elsewhere or is a typo for startAnalysis
@@ -241,11 +254,30 @@ export default function TamperingDetection({ preselectedEvidenceId, isEmbedded =
           </CardHeader>
         )}
         <CardContent className={isEmbedded ? "p-0" : ""}>
-          {isEmbedded && selectedFile ? (
-            (!currentAnalysis && !(results.filter(r => r.id === preselectedEvidenceId).length > 0)) && (
-              <Button onClick={handleDetectAndSearch} disabled={isAnalyzing} className="w-full gap-2">
-                {isAnalyzing ? <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing...</> : <><Search className="h-4 w-4" /> Run Tampering Check</>}
-              </Button>
+          {selectedFile ? (
+            (!currentAnalysis && !isAnalyzing && !(results.filter(r => r.id === preselectedEvidenceId).length > 0)) && (
+              <div className="space-y-4">
+                {!isEmbedded && (
+                  <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border border-border">
+                    <div className="h-16 w-16 bg-muted rounded overflow-hidden flex-shrink-0">
+                      <img 
+                        src={selectedFile ? URL.createObjectURL(selectedFile) : ""} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover"
+                        onLoad={(e) => URL.revokeObjectURL((e.target as HTMLImageElement).src)}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{selectedFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedFile(null)}>Change</Button>
+                  </div>
+                )}
+                <Button id="run-analysis-btn" onClick={() => startAnalysis()} disabled={isAnalyzing} className="w-full gap-2 py-6 text-base font-semibold shadow-lg">
+                  {isAnalyzing ? <><Loader2 className="h-5 w-5 animate-spin" /> Analyzing...</> : <><Search className="h-5 w-5" /> Run Forensic Tampering Check</>}
+                </Button>
+              </div>
             )
           ) : (
             <div className="flex flex-col sm:flex-row gap-4">

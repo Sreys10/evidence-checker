@@ -151,80 +151,65 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    // Get current user from localStorage
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      setCurrentUser(user);
-
-      // Load profile image if exists
-      const savedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
-      if (savedImage) {
-        setProfileImage(savedImage);
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch('/api/user/profile');
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data.user);
+          if (data.user.profileImage) setProfileImage(data.user.profileImage);
+          if (data.user.userType !== 'admin') router.push('/login');
+        } else {
+          // Fallback
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            setCurrentUser(user);
+            const savedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
+            if (savedImage) setProfileImage(savedImage);
+            if (user.userType !== 'admin') router.push('/login');
+          } else {
+            router.push('/login');
+          }
+        }
+      } catch (err) {
+        console.error("Profile fetch error:", err);
       }
+    };
 
-      // Redirect if not admin
-      if (user.userType !== 'admin') {
-        router.push('/login');
-        return;
-      }
-    } else {
-      router.push('/login');
-      return;
-    }
-
-    // Fetch all users
+    fetchProfile();
     fetchUsers();
-
-    // Load notifications
     loadNotifications();
 
     // Listen for new notifications
     const handleNotificationStorageChange = (e: StorageEvent) => {
-      if (e.key === 'adminNotifications') {
-        loadNotifications();
-      }
+      if (e.key === 'adminNotifications') loadNotifications();
     };
     window.addEventListener('storage', handleNotificationStorageChange);
 
-    // Also check for changes in the same window
-    const notificationInterval = setInterval(() => {
-      loadNotifications();
-    }, 1000);
-
-    // Listen for profile image updates
-    const handleImageStorageChange = () => {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        const updatedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
-        if (updatedImage) {
-          setProfileImage(updatedImage);
-        }
-      }
-    };
-
-    // Also check for changes in the same window
-    const interval = setInterval(() => {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        const updatedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
-        if (updatedImage && updatedImage !== profileImage) {
-          setProfileImage(updatedImage);
-        }
-      }
-    }, 500);
-
-    window.addEventListener('storage', handleImageStorageChange);
+    const notificationInterval = setInterval(loadNotifications, 2000);
 
     return () => {
       window.removeEventListener('storage', handleNotificationStorageChange);
-      window.removeEventListener('storage', handleImageStorageChange);
-      clearInterval(interval);
       clearInterval(notificationInterval);
     };
-  }, [router, profileImage]);
+  }, [router]);
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to delete this user? This action is irreversible.")) return;
+    try {
+      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setUsers(users.filter(u => u._id !== userId));
+        if (selectedUser?._id === userId) setSelectedUser(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete user");
+      }
+    } catch (err) {
+      console.error("Delete user error:", err);
+    }
+  };
 
   const markAsRead = (notificationId: string) => {
     const updated = notifications.map((n) =>
@@ -267,7 +252,10 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) { console.error(e) }
     localStorage.removeItem('user');
     router.push('/login');
   };
@@ -599,11 +587,17 @@ export default function AdminPage() {
                       if (file) {
                         setIsUploadingPhoto(true);
                         const reader = new FileReader();
-                        reader.onloadend = () => {
+                        reader.onloadend = async () => {
                           const result = reader.result as string;
-                          setProfileImage(result);
-                          if (currentUser?._id || currentUser?.email) {
-                            localStorage.setItem(`profileImage_${currentUser._id || currentUser.email}`, result);
+                          try {
+                            const res = await fetch('/api/user/profile', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ profileImage: result })
+                            });
+                            if (res.ok) setProfileImage(result);
+                          } catch (e) {
+                            console.error("Failed to upload profile photo:", e);
                           }
                           setIsUploadingPhoto(false);
                         };
@@ -902,8 +896,13 @@ export default function AdminPage() {
                         <Button variant="outline" className="w-full">
                           Edit User
                         </Button>
-                        <Button variant="destructive" className="w-full">
-                          Suspend User
+                        <Button 
+                          variant="destructive" 
+                          className="w-full"
+                          onClick={() => selectedUser._id && handleDeleteUser(selectedUser._id)}
+                          disabled={selectedUser._id === currentUser?._id}
+                        >
+                          Delete User Account
                         </Button>
                       </div>
                     </div>

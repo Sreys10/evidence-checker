@@ -79,16 +79,19 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (preselectedEvidenceId) {
-            const all = getAllEvidence();
-            const found = all.find(e => e.id === preselectedEvidenceId);
-            if (found && found.imageData) {
-                setSelectedImage(found.imageData);
-                setFileName(found.fileName);
-                setResult(null);
-                setError(null);
+        const loadPreselected = async () => {
+            if (preselectedEvidenceId) {
+                const all = await getAllEvidence();
+                const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
+                if (found && found.imageData) {
+                    setSelectedImage(found.imageData);
+                    setFileName(found.fileName);
+                    setResult(null);
+                    setError(null);
+                }
             }
-        }
+        };
+        loadPreselected();
     }, [preselectedEvidenceId]);
 
     const handleFileSelect = useCallback((files: FileList | null) => {
@@ -227,6 +230,7 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                                     <input type="file" accept="image/*" onChange={(e) => handleFileSelect(e.target.files)} className="hidden" ref={fileInputRef} />
                                     {selectedImage ? (
                                         <div className="flex items-center gap-4">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img src={selectedImage} alt="Preview" className="h-20 w-20 object-cover rounded-lg border border-border" />
                                             <div className="text-left min-w-0">
                                                 <p className="text-sm font-medium text-foreground truncate">{fileName}</p>
@@ -314,6 +318,7 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                                     <>
                                         {result.ela.elaImage && (
                                             <div className="relative rounded-lg overflow-hidden border border-border">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img src={result.ela.elaImage} alt="ELA output" className="w-full h-auto" />
                                                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-3">
                                                     <p className="text-white text-[11px] font-medium">
@@ -358,6 +363,7 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                                     <>
                                         {result.prnu.noiseMap && (
                                             <div className="relative rounded-lg overflow-hidden border border-border">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img src={result.prnu.noiseMap} alt="PRNU noise heatmap" className="w-full h-auto" />
                                                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-3">
                                                     <div className="flex items-center justify-between text-white text-[11px] font-medium">

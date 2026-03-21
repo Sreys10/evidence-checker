@@ -32,6 +32,7 @@ import {
   FileSearch,
   LayoutDashboard,
   Settings,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -62,12 +63,15 @@ export default function AnalystPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [preselectedCaseId, setPreselectedCaseId] = useState<string | null>(null);
   const [viewingEvidenceId, setViewingEvidenceId] = useState<string | null>(null);
   const [preselectedEvidenceId, setPreselectedEvidenceId] = useState<string | null>(null);
+  const [autoStartAnalysis, setAutoStartAnalysis] = useState(false);
   const [stats, setStats] = useState({
     totalEvidence: 0,
     totalCases: 0,
@@ -77,39 +81,40 @@ export default function AnalystPage() {
   });
 
   useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      setCurrentUser(user);
-      const savedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
-      if (savedImage) setProfileImage(savedImage);
-      if (user.userType !== 'analyst') { router.push('/login'); return; }
-    } else { router.push('/login'); return; }
-
-    const handleStorageChange = () => {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        const updatedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
-        if (updatedImage) setProfileImage(updatedImage);
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch('/api/user/profile');
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data.user);
+          if (data.user.profileImage) setProfileImage(data.user.profileImage);
+          if (data.user.userType !== 'analyst') {
+            router.push('/login');
+          }
+        } else {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            setCurrentUser(user);
+            const savedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
+            if (savedImage) setProfileImage(savedImage);
+            if (user.userType !== 'analyst') router.push('/login');
+          } else {
+            router.push('/login');
+          }
+        }
+      } catch (err) {
+        console.error("Profile fetch error:", err);
       }
     };
 
-    const interval = setInterval(() => {
+    fetchProfile();
+
+    const loadStats = async () => {
       const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        const updatedImage = localStorage.getItem(`profileImage_${user._id || user.email}`);
-        if (updatedImage && updatedImage !== profileImage) setProfileImage(updatedImage);
-      }
-    }, 500);
-
-    window.addEventListener('storage', handleStorageChange);
-
-    const loadStats = () => {
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        const userStats = getUserStats(user._id || user.email);
+      const user = userStr ? JSON.parse(userStr) : null;
+      if (user) {
+        const userStats = await getUserStats(user._id || user.email);
         setStats({
           totalEvidence: userStats.totalEvidence,
           totalCases: userStats.totalCases,
@@ -119,15 +124,14 @@ export default function AnalystPage() {
         });
       }
     };
+
     loadStats();
-    const statsInterval = setInterval(loadStats, 3000);
+    const statsInterval = setInterval(loadStats, 5000);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
       clearInterval(statsInterval);
     };
-  }, [router, profileImage]);
+  }, [router]);
 
   const handleViewEvidence = (evidenceId: string) => {
     setViewingEvidenceId(evidenceId);
@@ -136,10 +140,17 @@ export default function AnalystPage() {
 
   const handleEvidenceAction = (action: string, evidenceId: string) => {
     setPreselectedEvidenceId(evidenceId);
+    if (action === "detect") setAutoStartAnalysis(true);
     setActiveTab(action as ActiveTab);
   };
 
-  const handleLogout = () => { localStorage.removeItem('user'); router.push('/login'); };
+  const handleLogout = async () => { 
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) { console.error(e) }
+    localStorage.removeItem('user'); 
+    router.push('/login'); 
+  };
   const getFirstName = (fullName: string | undefined) => fullName ? fullName.split(' ')[0] : 'User';
 
   const tabs = [
@@ -271,7 +282,7 @@ export default function AnalystPage() {
             <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)}>
               <Settings className="h-5 w-5 text-muted-foreground" />
             </Button>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsHelpOpen(true)}>
               <HelpCircle className="h-4 w-4" />
               <span className="hidden xl:inline">Help</span>
             </Button>
@@ -297,11 +308,21 @@ export default function AnalystPage() {
                 )}
                 {activeTab === "upload" && (
                   <ImageUpload
-                    onNavigateToDetect={() => setActiveTab("detect")}
+                    onNavigateToDetect={(id?: string) => {
+                      if (id) setPreselectedEvidenceId(id);
+                      setAutoStartAnalysis(true);
+                      setActiveTab("detect");
+                    }}
                     preselectedCaseId={preselectedCaseId}
                   />
                 )}
-                {activeTab === "detect" && <TamperingDetection preselectedEvidenceId={preselectedEvidenceId} />}
+                {activeTab === "detect" && (
+                  <TamperingDetection 
+                    preselectedEvidenceId={preselectedEvidenceId} 
+                    autoStart={autoStartAnalysis}
+                    onAnalysisStarted={() => setAutoStartAnalysis(false)}
+                  />
+                )}
                 {activeTab === "metadata" && <MetadataAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
                 {activeTab === "face" && <FaceAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
                 {activeTab === "report" && <ReportGeneration />}
@@ -321,7 +342,7 @@ export default function AnalystPage() {
                     onView={handleViewEvidence}
                   />
                 )}
-                {activeTab === "blockchain" && <BlockchainUpload />}
+                {activeTab === "blockchain" && <BlockchainUpload currentUser={currentUser || undefined} />}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -356,11 +377,19 @@ export default function AnalystPage() {
                       if (file) {
                         setIsUploadingPhoto(true);
                         const reader = new FileReader();
-                        reader.onloadend = () => {
+                        reader.onloadend = async () => {
                           const result = reader.result as string;
-                          setProfileImage(result);
-                          if (currentUser?._id || currentUser?.email) {
-                            localStorage.setItem(`profileImage_${currentUser._id || currentUser.email}`, result);
+                          try {
+                            const res = await fetch('/api/user/profile', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ profileImage: result })
+                            });
+                            if (res.ok) {
+                              setProfileImage(result);
+                            }
+                          } catch (e) {
+                            console.error("Failed to upload profile photo to API:", e);
                           }
                           setIsUploadingPhoto(false);
                         };
@@ -388,9 +417,13 @@ export default function AnalystPage() {
                 <Button variant="outline" className="w-full justify-start hover:bg-primary/10" asChild onClick={() => setIsSettingsOpen(false)}>
                   <Link href="/profile"><User className="h-4 w-4 mr-2" />Profile</Link>
                 </Button>
-                <Button variant="outline" className="w-full justify-start" disabled><Settings className="h-4 w-4 mr-2" />Settings</Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => { setIsSettingsOpen(false); setIsAppSettingsOpen(true); }}>
+                  <Settings className="h-4 w-4 mr-2" />Preferences
+                </Button>
                 <Button variant="outline" className="w-full justify-start"><Bell className="h-4 w-4 mr-2" />Notifications</Button>
-                <Button variant="outline" className="w-full justify-start"><HelpCircle className="h-4 w-4 mr-2" />Help & Support</Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => { setIsSettingsOpen(false); setIsHelpOpen(true); }}>
+                  <HelpCircle className="h-4 w-4 mr-2" />Help & Support
+                </Button>
               </div>
             </div>
             <div className="space-y-4 pt-4 border-t border-border">
@@ -405,6 +438,172 @@ export default function AnalystPage() {
                 <LogOut className="h-4 w-4 mr-2" />Logout
               </Button>
             </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ═══════════ APPLICATION SETTINGS SHEET ═══════════ */}
+      <Sheet open={isAppSettingsOpen} onOpenChange={setIsAppSettingsOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto custom-scrollbar">
+          <SheetHeader className="mb-6 border-b pb-4">
+            <SheetTitle className="flex items-center gap-2 text-2xl">
+              <Settings className="h-6 w-6 text-primary" />
+              Application Preferences
+            </SheetTitle>
+            <SheetDescription>
+              Configure your local evidence, blockchain network, and interface.
+            </SheetDescription>
+          </SheetHeader>
+          
+          <div className="space-y-8">
+            {/* Blockchain Network Settings */}
+            <section className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <LinkIcon className="h-5 w-5 text-primary" /> Web3 & Network
+              </h3>
+              <div className="space-y-4 text-sm mt-2">
+                <div className="bg-muted/50 p-4 rounded-lg border">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-semibold">RPC Network Endpoint</h4>
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Connected</Badge>
+                  </div>
+                  <input type="text" disabled value="http://127.0.0.1:8545" className="w-full p-2 rounded-md bg-background border text-muted-foreground text-xs font-mono" />
+                  <p className="text-xs text-muted-foreground mt-2">Target chain ID used for evidence preservation transactions.</p>
+                </div>
+                
+                <div className="bg-muted/50 p-4 rounded-lg border">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-semibold">Local IPFS Gateway</h4>
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Daemon Up</Badge>
+                  </div>
+                  <input type="text" disabled value="http://127.0.0.1:5001" className="w-full p-2 rounded-md bg-background border text-muted-foreground text-xs font-mono" />
+                </div>
+              </div>
+            </section>
+
+            {/* Application Data & Privacy */}
+            <section className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" /> Data Management
+              </h3>
+              
+              <div className="bg-destructive/5 p-4 rounded-lg border border-destructive/20 border-l-4 border-l-destructive">
+                <h4 className="font-semibold text-destructive flex items-center gap-2 mb-1">
+                  <AlertTriangle className="h-4 w-4" /> Reset Evidence Storage
+                </h4>
+                <p className="text-xs text-muted-foreground mb-4">
+                  This will completely wipe your local instance of uploaded evidence, generated reports, and cached results. Blockchain preservation data remains on-chain.
+                </p>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => {
+                    if (confirm("Are you sure you want to completely erase all local mock evidence? This cannot be undone.")) {
+                      Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('evidenceStorage_') || key.startsWith('casesStorage_')) {
+                          localStorage.removeItem(key);
+                        }
+                      });
+                      window.location.reload();
+                    }
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  Clear Local Storage Cache
+                </Button>
+              </div>
+            </section>
+
+            {/* UI Settings */}
+            <section className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <LayoutDashboard className="h-5 w-5 text-primary" /> Interface Options
+              </h3>
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
+                <div>
+                  <h4 className="font-semibold text-sm">Color Theme</h4>
+                  <p className="text-xs text-muted-foreground">Toggle between Light, Dark, or System visual scheme.</p>
+                </div>
+                <ThemeToggle />
+              </div>
+            </section>
+
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ═══════════ MOBILE SIDEBAR ═══════════ */}
+      <Sheet open={isHelpOpen} onOpenChange={setIsHelpOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto custom-scrollbar">
+          <SheetHeader className="mb-6 border-b pb-4">
+            <SheetTitle className="flex items-center gap-2 text-2xl">
+              <Shield className="h-6 w-6 text-primary" />
+              EviCheck Help & Support
+            </SheetTitle>
+            <SheetDescription>
+              A quick guide to using the EviCheck Analyst platform.
+            </SheetDescription>
+          </SheetHeader>
+          
+          <div className="space-y-8">
+            {/* About Section */}
+            <section className="space-y-3">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" /> About EviCheck
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                EviCheck is a state-of-the-art digital forensics tool designed for analysts to verify evidence authenticity. 
+                Our platform provides advanced algorithms to detect deepfakes, analyze image metadata, perform facial recognition, and secure critical evidence on a blockchain ledger.
+              </p>
+              <div className="flex gap-2">
+                <Badge variant="outline">Version 1.0.0</Badge>
+                <Badge variant="secondary">Analyst Portal</Badge>
+              </div>
+            </section>
+
+            {/* How to use */}
+            <section className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Search className="h-5 w-5 text-primary" /> Using the Modules
+              </h3>
+              
+              <div className="space-y-4 text-sm mt-2">
+                <div className="bg-muted/50 p-3 rounded-lg border">
+                  <h4 className="font-semibold flex items-center gap-2 mb-1"><Upload className="h-4 w-4" /> 1. Upload Evidence</h4>
+                  <p className="text-muted-foreground">Start by uploading media (images or videos). Once uploaded, the evidence is isolated and waiting for module analysis.</p>
+                </div>
+                
+                <div className="bg-muted/50 p-3 rounded-lg border">
+                  <h4 className="font-semibold flex items-center gap-2 mb-1"><AlertTriangle className="h-4 w-4" /> 2. Tampering Detection</h4>
+                  <p className="text-muted-foreground">Run the AI models to scan for visual inconsistencies, GAN artifacts, and manipulation. The system will categorize it as Authentic or Tampered.</p>
+                </div>
+
+                <div className="bg-muted/50 p-3 rounded-lg border">
+                  <h4 className="font-semibold flex items-center gap-2 mb-1"><FileSearch className="h-4 w-4" /> 3. Metadata Analysis</h4>
+                  <p className="text-muted-foreground">Extract EXIF data to view the timestamp, geolocation, and camera model. A map is automatically generated based on GPS coordinates.</p>
+                </div>
+
+                <div className="bg-muted/50 p-3 rounded-lg border">
+                  <h4 className="font-semibold flex items-center gap-2 mb-1"><Fingerprint className="h-4 w-4" /> 4. Face Match DB</h4>
+                  <p className="text-muted-foreground">Upload suspected faces to find a match against our existing facial recognition database. View distance thresholds to gauge accuracy.</p>
+                </div>
+
+                <div className="bg-muted/50 p-3 rounded-lg border">
+                  <h4 className="font-semibold flex items-center gap-2 mb-1"><LinkIcon className="h-4 w-4" /> 5. Blockchain Preservation</h4>
+                  <p className="text-muted-foreground">Store crucial authentic evidence on the permanent IPFS blockchain ledger. This cryptographically secures the file hash against future tampering.</p>
+                </div>
+              </div>
+            </section>
+
+            {/* Support */}
+            <section className="space-y-3 pt-4 border-t">
+              <h3 className="text-lg font-semibold">Need more help?</h3>
+              <p className="text-sm text-muted-foreground">
+                If you encounter bugs, false positives, or blockchain connection issues, please report them directly to the administration.
+              </p>
+              <Button className="w-full mt-2" variant="outline" asChild>
+                <a href="mailto:support@evicheck.com">Contact IT Support</a>
+              </Button>
+            </section>
           </div>
         </SheetContent>
       </Sheet>

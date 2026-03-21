@@ -583,7 +583,7 @@ export const generateHTMLReport = (data: ReportData): string => {
             The following anomalies and inconsistencies were identified during the forensic examination:
           </p>
           <ul>
-            ${data.anomalies.map((anomaly, _idx) => `<li><strong>Finding:</strong> ${anomaly}</li>`).join('')}
+            ${data.anomalies.map((anomaly) => `<li><strong>Finding:</strong> ${anomaly}</li>`).join('')}
           </ul>
           <p style="margin-top: 20px; padding: 15px; background: white; border-radius: 6px; color: #7f1d1d; font-size: 14px; line-height: 1.7;">
             <strong>Risk Assessment:</strong> The presence of ${data.anomalies.length} ${data.anomalies.length === 1 ? 'anomaly' : 'anomalies'} 
@@ -635,7 +635,7 @@ export const generateHTMLReport = (data: ReportData): string => {
         ${data.faceDetection.matches && data.faceDetection.matches.length > 0 ? `
         <h3 class="subsection-title">6.1 Face Recognition Results</h3>
         <div style="display: grid; gap: 20px; margin: 25px 0;">
-          ${data.faceDetection.matches.map((match, idx) => `
+          ${data.faceDetection.matches.map((match) => `
           <div style="background: ${match.match_found ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' : 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'}; border: 2px solid ${match.match_found ? '#22c55e' : '#f59e0b'}; border-radius: 12px; padding: 25px;">
             <div style="display: flex; align-items: center; margin-bottom: 15px;">
               <h4 style="color: ${match.match_found ? '#166534' : '#92400e'}; font-size: 18px; margin: 0; margin-right: 15px;">Face ${match.face_number}</h4>

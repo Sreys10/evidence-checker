@@ -27,7 +27,7 @@ import MetadataAnalysis from "./metadata-analysis";
 import FaceAnalysis from "./face-analysis";
 import { motion } from "framer-motion";
 import { uploadToIPFS } from "@/lib/ipfs-service";
-import { connectWallet, registerEvidenceOnBlockchain } from "@/lib/web3-service";
+import { connectWallet, storeHashOnBlockchain } from "@/lib/web3-service";
 import { saveEvidence } from "@/lib/evidence-storage";
 import { Loader2, ShieldCheck, Link as LinkIcon } from "lucide-react";
 
@@ -57,29 +57,25 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
             const account = await connectWallet();
             if (!account) throw new Error("Wallet connection failed or rejected");
 
-            // 2. Upload to IPFS
+            // 2. Upload image to local IPFS daemon
             const file = await dataURLtoFile(evidence.imageData, evidence.fileName);
-            // In a real app, you might want to show upload progress here
             const ipfsHash = await uploadToIPFS(file);
 
-            // 3. Register on Chain
-            const tx = await registerEvidenceOnBlockchain(
-                ipfsHash,
-                evidence.fileName,
-                evidence.type,
-                evidence.id
-            );
+            // 3. Store IPFS CID on ImageStorage contract
+            const receipt = await storeHashOnBlockchain(ipfsHash);
 
-            // 4. Save
+            // 4. Save to local evidence record
             const updatedEvidence = {
                 ...evidence,
                 ipfsHash,
-                blockchainHash: tx.hash
+                blockchainHash: receipt.hash,
             };
             setEvidence(updatedEvidence);
-            saveEvidence(updatedEvidence); // persist
+            await saveEvidence(updatedEvidence);
 
-            alert(`Evidence preserved on blockchain!\nTransaction Hash: ${tx.hash}`);
+            alert(
+                `Evidence preserved on blockchain!\nIPFS CID: ${ipfsHash}\nTransaction Hash: ${receipt.hash}`
+            );
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
@@ -91,9 +87,12 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
     };
 
     useEffect(() => {
-        const all = getAllEvidence();
-        const found = all.find(e => e.id === evidenceId);
-        if (found) setEvidence(found);
+        const loadEvidence = async () => {
+            const all = await getAllEvidence();
+            const found = all.find(e => (e.id || (e as any)._id) === evidenceId);
+            if (found) setEvidence(found);
+        };
+        loadEvidence();
     }, [evidenceId]);
 
     if (!evidence) {
@@ -143,7 +142,7 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
                         <Share2 className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Share</span>
                     </Button>
-                    <Button size="sm" onClick={() => onAction('report', evidence.id)} className="h-8 gap-2 ml-2">
+                    <Button size="sm" onClick={() => onAction('report', (evidence.id || (evidence as any)._id) as string)} className="h-8 gap-2 ml-2">
                         <FileText className="h-3.5 w-3.5" />
                         Generate Report
                     </Button>
@@ -240,12 +239,12 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
                                                 </div>
                                             )}
                                             <a
-                                                href={`https://sepolia.etherscan.io/tx/${evidence.blockchainHash}`}
+                                                href={`http://127.0.0.1:8545`}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="text-xs text-primary flex items-center gap-1 hover:underline mt-1"
                                             >
-                                                View on Explorer <LinkIcon className="h-3 w-3" />
+                                                View on Local Hardhat Node <LinkIcon className="h-3 w-3" />
                                             </a>
                                         </div>
                                     )}

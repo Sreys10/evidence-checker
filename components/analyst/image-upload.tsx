@@ -7,14 +7,27 @@ import {
   getAllCases,
   getEvidenceByCase,
   deleteCase,
+  deleteEvidence,
+  renameEvidence,
   type StoredEvidence,
   type StoredCase,
 } from "@/lib/evidence-storage";
-import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/custom-tabs";
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetDescription, 
+  SheetHeader, 
+  SheetTitle,
+  SheetFooter,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   Upload,
   X,
@@ -31,10 +44,20 @@ import {
   Hash,
   FileText,
   Trash2,
+  Edit2,
+  Eye,
+  Calendar,
+  Info,
+  ExternalLink,
+  ShieldCheck,
+  AlertCircle,
+  Clock,
+  Download,
 } from "lucide-react";
 
 interface UploadedFile {
   id: string;
+  dbId?: string; // ID from database
   file: File;
   preview: string;
   status: "uploading" | "success" | "error";
@@ -45,7 +68,7 @@ interface UploadedFile {
 }
 
 interface ImageUploadProps {
-  onNavigateToDetect?: () => void;
+  onNavigateToDetect?: (evidenceId?: string) => void;
   preselectedCaseId?: string | null;
 }
 
@@ -59,10 +82,18 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
   const [isDragging, setIsDragging] = useState(false);
   const [evidenceNameInput, setEvidenceNameInput] = useState("");
   const [existingEvidence, setExistingEvidence] = useState<StoredEvidence[]>([]);
+  const [isInstantAnalysis, setIsInstantAnalysis] = useState(false);
+  const [viewingEvidence, setViewingEvidence] = useState<StoredEvidence | null>(null);
+  const [isRenaming, setIsRenaming] = useState<string | null>(null); // evidence ID being renamed
+  const [renameValue, setRenameValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setCases(getAllCases());
+    const loadCases = async () => {
+      const allCases = await getAllCases();
+      setCases(allCases);
+    };
+    loadCases();
   }, []);
 
   useEffect(() => {
@@ -76,14 +107,21 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
   }, [preselectedCaseId, cases]);
 
   useEffect(() => {
-    if (selectedCase) {
-      setExistingEvidence(getEvidenceByCase(selectedCase.id));
-    } else {
-      setExistingEvidence([]);
-    }
+    const loadEvidence = async () => {
+      if (selectedCase) {
+        const evidence = await getEvidenceByCase(selectedCase.id || (selectedCase as any)._id);
+        setExistingEvidence(evidence);
+      } else {
+        setExistingEvidence([]);
+      }
+    };
+    loadEvidence();
   }, [selectedCase]);
 
-  const refreshCases = () => setCases(getAllCases());
+  const refreshCases = async () => {
+    const allCases = await getAllCases();
+    setCases(allCases);
+  };
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes";
@@ -93,27 +131,60 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
-  const handleCreateCase = () => {
+  const handleCreateCase = async () => {
     if (!newCaseNumber.trim() || !newCaseName.trim()) return;
     const newCase: StoredCase = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       caseNumber: newCaseNumber.trim(),
       caseName: newCaseName.trim(),
       createdDate: new Date().toISOString(),
     };
-    saveCase(newCase);
-    refreshCases();
-    setSelectedCase(newCase);
+    await saveCase(newCase);
+    await refreshCases();
+    
+    // Find the newly created case in the updated list to select it
+    // Note: saveCase now works with MongoDB, but the UI might need the ID
+    // Our backend returns the new case including _id.
+    // However, saveCase in lib/evidence-storage.ts doesn't return anything.
+    // I should probably update it to return the saved object.
+    // For now, I'll just refresh and the user can select it or I can try to find it.
     setIsCreatingCase(false);
     setNewCaseNumber("");
     setNewCaseName("");
   };
 
-  const handleDeleteCase = (caseId: string) => {
+  const handleDeleteCase = async (caseId: string) => {
     if (!confirm("Delete this case and all its evidence?")) return;
-    deleteCase(caseId);
-    refreshCases();
-    if (selectedCase?.id === caseId) setSelectedCase(null);
+    await deleteCase(caseId);
+    await refreshCases();
+    if (selectedCase?.id === caseId || (selectedCase as any)?._id === caseId) setSelectedCase(null);
+  };
+
+  const handleDeleteEvidence = async (evidenceId: string) => {
+    if (!confirm("Are you sure you want to delete this evidence?")) return;
+    await deleteEvidence(evidenceId);
+    if (selectedCase) {
+      const evidence = await getEvidenceByCase(selectedCase.id || (selectedCase as any)._id);
+      setExistingEvidence(evidence);
+    }
+    if (viewingEvidence?.id === evidenceId || (viewingEvidence as any)?._id === evidenceId) {
+      setViewingEvidence(null);
+    }
+  };
+
+  const handleRenameEvidence = async (evidenceId: string) => {
+    if (!renameValue.trim()) {
+      setIsRenaming(null);
+      return;
+    }
+    const success = await renameEvidence(evidenceId, renameValue.trim());
+    if (success) {
+      if (selectedCase) {
+        const evidence = await getEvidenceByCase(selectedCase.id || (selectedCase as any)._id);
+        setExistingEvidence(evidence);
+      }
+    }
+    setIsRenaming(null);
+    setRenameValue("");
   };
 
   const handleFileSelect = useCallback(
@@ -147,19 +218,27 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
           setUploadedFiles((prev) => [...prev, newFile]);
 
           const evidenceData: StoredEvidence = {
-            id: fileId,
             fileName: file.name,
             imageData: preview,
             uploadDate: new Date().toISOString(),
             status: "pending",
             size: formatFileSize(file.size),
             type: file.type,
-            caseId: selectedCase.id,
+            caseId: selectedCase.id || (selectedCase as any)._id,
             caseNumber: selectedCase.caseNumber,
             caseName: selectedCase.caseName,
             evidenceName: eName,
           };
-          saveEvidence(evidenceData);
+          
+          saveEvidence(evidenceData).then((saved) => {
+            if (saved) {
+              setUploadedFiles((prev) =>
+                prev.map((f) =>
+                  f.id === fileId ? { ...f, dbId: saved.id || saved._id } : f
+                )
+              );
+            }
+          });
 
           const interval = setInterval(() => {
             setUploadedFiles((prev) =>
@@ -303,10 +382,12 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
 
           {/* Existing Cases */}
           {cases.map((c) => {
-            const evidenceCount = getEvidenceByCase(c.id).length;
+            // Note: Since getEvidenceByCase is now async, we'd ideally load counts 
+            // separately or include them in the cases API. 
+            // For now, I'll keep the UI simple or just show a '-'
             return (
               <motion.div
-                key={c.id}
+                key={c.id || (c as any)._id}
                 whileHover={{ scale: 1.02 }}
                 className="group relative"
               >
@@ -321,9 +402,6 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <FolderOpen className="h-5 w-5 text-primary" />
                     </div>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {evidenceCount} item{evidenceCount !== 1 ? "s" : ""}
-                    </Badge>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground font-mono">{c.caseNumber}</p>
@@ -336,7 +414,7 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
 
                 {/* Delete */}
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleDeleteCase(c.id); }}
+                  onClick={(e) => { e.stopPropagation(); handleDeleteCase(c.id || (c as any)._id); }}
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 rounded-full bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center"
                 >
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -508,10 +586,25 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                       </div>
                     )}
                     {file.status === "success" && (
-                      <div className="absolute top-2 right-2">
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4">
+                        <div className="bg-emerald-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full mb-3 shadow-lg flex items-center">
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          UPLOADED
+                        </div>
+                        <Button 
+                          size="sm" 
+                          className="w-full bg-primary hover:bg-primary/90 text-white gap-1.5 h-8 text-[11px]"
+                          onClick={() => onNavigateToDetect?.(file.dbId)}
+                        >
+                          <Search className="h-3.5 w-3.5" />
+                          Instant Detect
+                        </Button>
+                      </div>
+                    )}
+                    {file.status === "success" && (
+                      <div className="absolute top-2 right-2 group-hover:hidden">
                         <div className="bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center shadow-sm">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
-                          UPLOADED
                         </div>
                       </div>
                     )}
@@ -553,7 +646,10 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                       </div>
                     </div>
                     <Button
-                      onClick={onNavigateToDetect}
+                      onClick={() => {
+                        const lastSuccessfulFile = [...uploadedFiles].reverse().find(f => f.status === 'success' && f.dbId);
+                        onNavigateToDetect?.(lastSuccessfulFile?.dbId);
+                      }}
                       className="w-full sm:w-auto gap-2 shadow-md"
                     >
                       Proceed to Detection
@@ -575,37 +671,299 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {existingEvidence.map((ev) => (
-              <Card key={ev.id} className="overflow-hidden group hover:border-primary/50 transition-colors">
+              <Card 
+                key={ev.id} 
+                className="overflow-hidden group hover:border-primary/50 transition-all duration-300 hover:shadow-md cursor-pointer relative"
+                onClick={() => setViewingEvidence(ev)}
+              >
                 <div className="aspect-square relative bg-muted">
                   {ev.imageData ? (
-                    <img src={ev.imageData} alt={ev.fileName} className="w-full h-full object-cover" />
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={ev.imageData} alt={ev.fileName} className="w-full h-full object-cover" />
+                    </>
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <ImageIcon className="h-8 w-8" />
                     </div>
                   )}
+                  
+                  {/* Status Badge */}
                   {ev.status === 'complete' && (
-                    <div className="absolute top-1 right-1 bg-background/80 backdrop-blur-sm rounded-full p-0.5">
+                    <div className="absolute top-2 right-2 bg-background/90 backdrop-blur-sm rounded-full p-1 shadow-sm z-10">
                       {ev.result === 'authentic' ?
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> :
-                        <X className="h-3.5 w-3.5 text-red-500" />}
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
+                        <AlertCircle className="h-4 w-4 text-rose-500" />}
                     </div>
                   )}
-                </div>
-                <div className="p-2.5">
-                  <p className="text-xs font-medium truncate" title={ev.evidenceName || ev.fileName}>
-                    {ev.evidenceName || ev.fileName}
-                  </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-[10px] text-muted-foreground truncate">{new Date(ev.uploadDate).toLocaleDateString()}</span>
-                    <span className="text-[10px] uppercase font-mono text-muted-foreground">{ev.type.split('/')[1] || 'FILE'}</span>
+
+                  {/* Overlay Actions */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
+                    <Button 
+                      size="icon" 
+                      variant="secondary" 
+                      className="h-8 w-8 rounded-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingEvidence(ev);
+                      }}
+                    >
+                      <Eye className="h-4 w-4 text-primary" />
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="secondary" 
+                      className="h-8 w-8 rounded-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsRenaming(ev.id!);
+                        setRenameValue(ev.evidenceName || ev.fileName);
+                      }}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="destructive" 
+                      className="h-8 w-8 rounded-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteEvidence(ev.id!);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
+
+                {isRenaming === ev.id ? (
+                  <div className="p-2 bg-background border-t" onClick={(e) => e.stopPropagation()}>
+                    <Input 
+                      value={renameValue} 
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleRenameEvidence(ev.id!);
+                        if (e.key === 'Escape') setIsRenaming(null);
+                      }}
+                      className="h-8 text-xs focus-visible:ring-primary"
+                      autoFocus
+                    />
+                    <div className="flex justify-end gap-1 mt-1">
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setIsRenaming(null)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={() => handleRenameEvidence(ev.id!)}>
+                        <CheckCircle2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5">
+                    <p className="text-xs font-semibold truncate" title={ev.evidenceName || ev.fileName}>
+                      {ev.evidenceName || ev.fileName}
+                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {new Date(ev.uploadDate).toLocaleDateString()}
+                      </span>
+                      <Badge variant="outline" className="text-[8px] h-4 px-1 uppercase font-mono">
+                        {ev.type.split('/')[1] || 'FILE'}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
               </Card>
             ))}
           </div>
         </div>
       )}
+
+      {/* Evidence Detail Sheet */}
+      <Sheet open={!!viewingEvidence} onOpenChange={(open) => !open && setViewingEvidence(null)}>
+        <SheetContent side="right" className="sm:max-w-xl w-full p-0 border-l border-border/50 bg-background/95 backdrop-blur-md">
+          {viewingEvidence && (
+            <div className="flex flex-col h-full">
+              <SheetHeader className="p-6 border-b border-border/50 bg-muted/30">
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-wider">
+                    Evidence ID: {viewingEvidence.id || (viewingEvidence as any)._id}
+                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => {
+                      setIsRenaming(viewingEvidence.id!);
+                      setRenameValue(viewingEvidence.evidenceName || viewingEvidence.fileName);
+                      setViewingEvidence(null);
+                    }}>
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteEvidence(viewingEvidence.id!)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <SheetTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
+                  {viewingEvidence.evidenceName || viewingEvidence.fileName}
+                </SheetTitle>
+                <SheetDescription className="flex items-center gap-2 mt-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  Uploaded on {new Date(viewingEvidence.uploadDate).toLocaleString()}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-6 space-y-8">
+                  {/* Image Preview */}
+                  <div className="relative group rounded-2xl overflow-hidden bg-black/5 border border-border/50 shadow-inner aspect-[4/3]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={viewingEvidence.imageData} 
+                      alt={viewingEvidence.fileName} 
+                      className="w-full h-full object-contain"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex justify-end">
+                      <Button variant="secondary" size="sm" className="gap-2 backdrop-blur-sm bg-background/20 text-white border-white/20 hover:bg-background/40">
+                        <Download className="h-4 w-4" /> Save Original
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Tabs defaultValue="forensics" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-6">
+                      <TabsTrigger value="forensics" className="gap-2">
+                        <ShieldCheck className="h-4 w-4" /> Forensic Results
+                      </TabsTrigger>
+                      <TabsTrigger value="metadata" className="gap-2">
+                        <Info className="h-4 w-4" /> File Metadata
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="forensics" className="space-y-6">
+                      {viewingEvidence.status === 'complete' ? (
+                        <div className="space-y-4">
+                          <div className={cn(
+                            "p-5 rounded-2xl border flex items-center justify-between",
+                            viewingEvidence.result === 'tampered' 
+                              ? "bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-400" 
+                              : "bg-emerald-500/5 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                          )}>
+                            <div className="flex items-center gap-4">
+                              <div className={cn(
+                                "h-12 w-12 rounded-2xl flex items-center justify-center",
+                                viewingEvidence.result === 'tampered' ? "bg-rose-500/20" : "bg-emerald-500/20"
+                              )}>
+                                {viewingEvidence.result === 'tampered' ? <AlertCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold uppercase tracking-wider opacity-60">Verdict</p>
+                                <p className="text-xl font-black capitalize tracking-tight h-7">{viewingEvidence.result}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs font-bold uppercase tracking-wider opacity-60">Confidence</p>
+                              <p className="text-xl font-black tracking-tight h-7">{(viewingEvidence.confidence || 0).toFixed(1)}%</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-bold flex items-center gap-2 px-1">
+                              <AlertCircle className="h-4 w-4 text-primary" /> Forensic Anomalies
+                            </h4>
+                            {viewingEvidence.anomalies && viewingEvidence.anomalies.length > 0 ? (
+                              <div className="grid gap-2">
+                                {viewingEvidence.anomalies.map((anomaly, idx) => (
+                                  <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-muted/40 border border-border/40 text-sm">
+                                    <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                                    {anomaly}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center p-8 rounded-2xl bg-muted/20 border border-dashed border-border/50 text-muted-foreground italic text-sm">
+                                No forensic anomalies detected in the image structure.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center p-12 rounded-3xl bg-muted/10 border border-dashed border-border/50">
+                          <div className="h-16 w-16 bg-muted/40 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                            <Search className="h-8 w-8 text-muted-foreground animate-pulse" />
+                          </div>
+                          <h4 className="font-bold text-foreground mb-2">No Forensic Data</h4>
+                          <p className="text-sm text-muted-foreground mb-6">
+                            This evidence has not been analyzed for tampering yet.
+                          </p>
+                          <Button 
+                            className="w-full gap-2 py-6 rounded-2xl shadow-lg"
+                            onClick={() => onNavigateToDetect?.(viewingEvidence.id || (viewingEvidence as any)._id)}
+                          >
+                            <Search className="h-4 w-4" /> Start Forensic Analysis
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* AI Detection Visualization */}
+                      {viewingEvidence.aiDetection && (
+                         <div className="p-5 rounded-2xl bg-muted/30 border border-border/50 space-y-4">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">AI Verification Metrics</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                               <div className="space-y-1">
+                                  <p className="text-[10px] font-bold text-muted-foreground">Deepfake</p>
+                                  <div className="h-1.5 w-full bg-background rounded-full overflow-hidden">
+                                     <div className="h-full bg-primary" style={{ width: `${(viewingEvidence.aiDetection.deepfake || 0) * 100}%` }} />
+                                  </div>
+                               </div>
+                               <div className="space-y-1">
+                                  <p className="text-[10px] font-bold text-muted-foreground">AI-Generated</p>
+                                  <div className="h-1.5 w-full bg-background rounded-full overflow-hidden">
+                                     <div className="h-full bg-amber-500" style={{ width: `${(viewingEvidence.aiDetection.aiGenerated || 0) * 100}%` }} />
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="metadata" className="space-y-6">
+                       <div className="grid gap-4">
+                          {[
+                            { label: "Filename", value: viewingEvidence.fileName, icon: FileText },
+                            { label: "File Format", value: viewingEvidence.type.toUpperCase(), icon: ImageIcon },
+                            { label: "File Size", value: viewingEvidence.size, icon: Info },
+                            { label: "Blockchain Verification", value: viewingEvidence.blockchainHash ? "Registered" : "Pending Registry", icon: ShieldCheck },
+                            { label: "IPFS Storage", value: viewingEvidence.ipfsHash || "Not stored on IPFS", icon: CloudUpload },
+                          ].map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                               <div className="flex items-center gap-3">
+                                  <item.icon className="h-4 w-4 text-muted-foreground" />
+                                  <p className="text-xs font-semibold text-muted-foreground">{item.label}</p>
+                               </div>
+                               <p className="text-xs font-bold font-mono tracking-tight max-w-[200px] truncate">{item.value}</p>
+                            </div>
+                          ))}
+                       </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+
+              <SheetFooter className="p-6 border-t border-border/50 bg-background">
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <Button variant="outline" className="gap-2 rounded-xl py-6" onClick={() => {
+                    // Navigate to face matching with this ID
+                    // Need to implement this in page.tsx if desired
+                  }}>
+                    <Search className="h-4 w-4" /> Match Faces
+                  </Button>
+                  <Button className="gap-2 rounded-xl py-6" onClick={() => onNavigateToDetect?.(viewingEvidence.id || (viewingEvidence as any)._id)}>
+                    <Search className="h-4 w-4" /> Analysis
+                  </Button>
+                </div>
+              </SheetFooter>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

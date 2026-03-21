@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
       const backendResponse = await fetch(backendUrl, {
         method: 'POST',
         body: formData,
+        headers: {
+          'X-API-Key': process.env.EVI_CHECK_API_KEY || 'default-api-key-replace-me'
+        }
       });
 
       const data = await backendResponse.json();
