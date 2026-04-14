@@ -11,22 +11,14 @@ export async function GET(req: NextRequest) {
     if (!payload || payload.userType !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    
+
     const users = await getAllUsers();
-    
+
     return NextResponse.json({ users }, { status: 200 });
   } catch (error: unknown) {
     console.error('Get users error:', error);
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
-    // Check for MongoDB connection errors
-    if (errorMessage.includes('Mongo') || errorMessage.includes('connection')) {
-      return NextResponse.json(
-        { error: 'Database connection error. Please check your MongoDB connection string.' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json(
       { error: errorMessage || 'Internal server error' },
@@ -34,5 +26,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
-

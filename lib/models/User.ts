@@ -1,4 +1,4 @@
-import { getDatabase } from '../mongodb';
+import { sql, query } from '../postgres';
 import bcrypt from 'bcryptjs';
 
 export interface User {
@@ -13,84 +13,109 @@ export interface User {
   lastLogin?: Date;
 }
 
-export async function createUser(userData: Omit<User, '_id' | 'createdAt' | 'updatedAt'>): Promise<User> {
-  const db = await getDatabase();
-  const usersCollection = db.collection<User>('users');
+// Map a Postgres row (snake_case) to our User interface (camelCase / _id)
+function mapRow(row: Record<string, unknown>): User {
+  return {
+    _id: row.id as string,
+    name: row.name as string,
+    email: row.email as string,
+    password: row.password as string,
+    userType: row.user_type as User['userType'],
+    profileImage: row.profile_image as string | undefined,
+    createdAt: row.created_at as Date | undefined,
+    updatedAt: row.updated_at as Date | undefined,
+    lastLogin: row.last_login as Date | undefined,
+  };
+}
 
-  // Check if user already exists
-  const existingUser = await usersCollection.findOne({ email: userData.email });
-  if (existingUser) {
+export async function createUser(
+  userData: Omit<User, '_id' | 'createdAt' | 'updatedAt'>
+): Promise<User> {
+  const existing = await findUserByEmail(userData.email);
+  if (existing) {
     throw new Error('User with this email already exists');
   }
 
-  // Hash password
   const hashedPassword = await bcrypt.hash(userData.password, 10);
 
-  // Create user
-  const newUser: Omit<User, '_id'> = {
-    ...userData,
-    password: hashedPassword,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  const result = await sql`
+    INSERT INTO users (name, email, password, user_type, profile_image)
+    VALUES (
+      ${userData.name},
+      ${userData.email},
+      ${hashedPassword},
+      ${userData.userType},
+      ${userData.profileImage ?? null}
+    )
+    RETURNING *
+  `;
 
-  const result = await usersCollection.insertOne(newUser as Omit<User, '_id'>);
-  
-  return {
-    ...newUser,
-    _id: result.insertedId.toString(),
-  };
+  return mapRow(result[0] as Record<string, unknown>);
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {
-  const db = await getDatabase();
-  const usersCollection = db.collection<User>('users');
-  return await usersCollection.findOne({ email });
+  const result = await sql`
+    SELECT * FROM users WHERE email = ${email} LIMIT 1
+  `;
+  return result.length > 0 ? mapRow(result[0] as Record<string, unknown>) : null;
 }
 
-export async function verifyPassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
-  return await bcrypt.compare(plainPassword, hashedPassword);
+export async function verifyPassword(
+  plainPassword: string,
+  hashedPassword: string
+): Promise<boolean> {
+  return bcrypt.compare(plainPassword, hashedPassword);
 }
 
 export async function updateLastLogin(email: string): Promise<void> {
-  const db = await getDatabase();
-  const usersCollection = db.collection<User>('users');
-  await usersCollection.updateOne(
-    { email },
-    { $set: { lastLogin: new Date(), updatedAt: new Date() } }
-  );
+  await sql`
+    UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE email = ${email}
+  `;
 }
 
-export async function updateUser(email: string, updates: Partial<Omit<User, '_id' | 'email' | 'password'>>): Promise<void> {
-  const db = await getDatabase();
-  const usersCollection = db.collection<User>('users');
-  await usersCollection.updateOne(
-    { email },
-    { 
-      $set: { 
-        ...updates, 
-        updatedAt: new Date() 
-      } 
+export async function updateUser(
+  email: string,
+  updates: Partial<Omit<User, '_id' | 'email' | 'password'>>
+): Promise<void> {
+  const fieldToColumn: Record<string, string> = {
+    name: 'name',
+    profileImage: 'profile_image',
+    userType: 'user_type',
+    lastLogin: 'last_login',
+  };
+
+  const setClauses = ['updated_at = NOW()'];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  for (const [tsKey, sqlCol] of Object.entries(fieldToColumn)) {
+    if (tsKey in updates) {
+      setClauses.push(`${sqlCol} = $${paramIndex++}`);
+      params.push((updates as Record<string, unknown>)[tsKey] ?? null);
     }
+  }
+
+  params.push(email);
+  await query(
+    `UPDATE users SET ${setClauses.join(', ')} WHERE email = $${paramIndex}`,
+    params
   );
 }
 
 export async function findUserById(id: string): Promise<User | null> {
-  const { ObjectId } = await import('mongodb');
-  const db = await getDatabase();
-  const usersCollection = db.collection<User>('users');
-  try {
-    return await usersCollection.findOne({ _id: new ObjectId(id) as any });
-  } catch (e) {
-    return null;
-  }
+  const result = await sql`
+    SELECT * FROM users WHERE id = ${id} LIMIT 1
+  `;
+  return result.length > 0 ? mapRow(result[0] as Record<string, unknown>) : null;
 }
 
 export async function getAllUsers(): Promise<Omit<User, 'password'>[]> {
-  const db = await getDatabase();
-  const usersCollection = db.collection<User>('users');
-  const users = await usersCollection.find({}).toArray();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  return users.map(({ password, ...user }) => user);
+  const result = await sql`
+    SELECT * FROM users ORDER BY created_at DESC
+  `;
+  return result.map((row) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...rest } = mapRow(row as Record<string, unknown>);
+    return rest;
+  });
 }
-

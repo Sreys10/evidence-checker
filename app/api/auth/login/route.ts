@@ -47,10 +47,7 @@ export async function POST(request: NextRequest) {
     // Fetch updated user with lastLogin
     const updatedUser = await findUserByEmail(email);
     if (!updatedUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     // Return user without password
@@ -59,20 +56,17 @@ export async function POST(request: NextRequest) {
 
     // Issue Secure JWT Cookie
     const { signJwt } = await import('@/lib/jwt');
-    const token = await signJwt({ 
+    const token = await signJwt({
       id: updatedUser._id?.toString() || '',
       email: updatedUser.email,
-      userType: updatedUser.userType
+      userType: updatedUser.userType,
     });
 
     const response = NextResponse.json(
-      {
-        message: 'Login successful',
-        user: userWithoutPassword,
-      },
+      { message: 'Login successful', user: userWithoutPassword },
       { status: 200 }
     );
-    
+
     response.cookies.set({
       name: 'evicheck_session',
       value: token,
@@ -80,22 +74,14 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 // 1 day
+      maxAge: 60 * 60 * 24, // 1 day
     });
 
     return response;
   } catch (error: unknown) {
     console.error('Login error:', error);
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
-    // Check for MongoDB connection errors
-    if (errorMessage.includes('Mongo') || errorMessage.includes('connection')) {
-      return NextResponse.json(
-        { error: 'Database connection error. Please check your MongoDB connection string.' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json(
       { error: errorMessage || 'Internal server error' },
@@ -103,4 +89,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

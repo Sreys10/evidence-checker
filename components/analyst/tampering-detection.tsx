@@ -53,8 +53,8 @@ interface TamperingDetectionProps {
   onAnalysisStarted?: () => void;
 }
 
-export default function TamperingDetection({ 
-  preselectedEvidenceId, 
+export default function TamperingDetection({
+  preselectedEvidenceId,
   isEmbedded = false,
   autoStart = false,
   onAnalysisStarted
@@ -78,7 +78,7 @@ export default function TamperingDetection({
           try {
             const file = await dataURLtoFile(found.imageData, found.fileName);
             setSelectedFile(file);
-            
+
             // Auto-start analysis if requested and not already analyzing
             if (autoStart && !isAnalyzing) {
               if (onAnalysisStarted) onAnalysisStarted();
@@ -243,8 +243,11 @@ export default function TamperingDetection({
 
   return (
     <div className="space-y-6">
-      {/* Upload Section */}
-      <Card className={isEmbedded ? "border-0 shadow-none bg-transparent" : ""}>
+
+      {/* ── Forensic Tampering ────────────────────────────────────────── */}
+      <>
+        {/* Upload Section */}
+        <Card className={isEmbedded ? "border-0 shadow-none bg-transparent" : ""}>
         {!isEmbedded && (
           <CardHeader>
             <CardTitle>Detect Tampering</CardTitle>
@@ -260,9 +263,9 @@ export default function TamperingDetection({
                 {!isEmbedded && (
                   <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border border-border">
                     <div className="h-16 w-16 bg-muted rounded overflow-hidden flex-shrink-0">
-                      <img 
-                        src={selectedFile ? URL.createObjectURL(selectedFile) : ""} 
-                        alt="Preview" 
+                      <img
+                        src={selectedFile ? URL.createObjectURL(selectedFile) : ""}
+                        alt="Preview"
                         className="w-full h-full object-cover"
                         onLoad={(e) => URL.revokeObjectURL((e.target as HTMLImageElement).src)}
                       />
@@ -505,7 +508,8 @@ export default function TamperingDetection({
           </div>
         )
       }
-    </div >
+      </>
+    </div>
   );
 }
 
