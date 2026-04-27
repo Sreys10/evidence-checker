@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJwt } from '@/lib/jwt';
-import { query } from '@/lib/postgres';
-
-async function authenticate(request: NextRequest) {
-  const sessionCookie = request.cookies.get('evicheck_session');
-  if (!sessionCookie || !sessionCookie.value) return null;
-  return verifyJwt(sessionCookie.value);
-}
+import { deleteUser } from '@/lib/models/User';
 
 export async function DELETE(
   req: NextRequest,
@@ -28,12 +22,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 });
     }
 
-    const result = await query(
-      'DELETE FROM users WHERE id = $1 RETURNING id',
-      [id]
-    );
+    const success = await deleteUser(id);
 
-    if (result.length === 0) {
+    if (!success) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 

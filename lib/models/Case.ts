@@ -41,9 +41,9 @@ export async function getCasesByUser(userId: string): Promise<Case[]> {
 }
 
 export async function deleteCase(id: string, userId: string): Promise<boolean> {
-  // evidence rows are cascade-deleted by the ON DELETE CASCADE FK constraint
+  // Evidence rows are cascade-deleted by the ON DELETE CASCADE FK constraint
   const result = await sql`
     DELETE FROM cases WHERE id = ${id} AND user_id = ${userId} RETURNING id
   `;
-  return result.length > 0;
+  return Array.isArray(result) && result.length > 0;
 }

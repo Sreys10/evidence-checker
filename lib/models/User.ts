@@ -111,11 +111,15 @@ export async function findUserById(id: string): Promise<User | null> {
 
 export async function getAllUsers(): Promise<Omit<User, 'password'>[]> {
   const result = await sql`
-    SELECT * FROM users ORDER BY created_at DESC
+    SELECT id, name, email, user_type, profile_image, created_at, updated_at, last_login
+    FROM users ORDER BY created_at DESC
   `;
-  return result.map((row) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...rest } = mapRow(row as Record<string, unknown>);
-    return rest;
-  });
+  return result.map((row) => mapRow(row as Record<string, unknown>));
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+  const result = await sql`
+    DELETE FROM users WHERE id = ${id} RETURNING id
+  `;
+  return Array.isArray(result) && result.length > 0;
 }

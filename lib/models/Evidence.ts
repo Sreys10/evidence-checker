@@ -201,5 +201,5 @@ export async function deleteEvidence(id: string, userId: string): Promise<boolea
   const result = await sql`
     DELETE FROM evidence WHERE id = ${id} AND user_id = ${userId} RETURNING id
   `;
-  return result.length > 0;
+  return Array.isArray(result) && result.length > 0;
 }

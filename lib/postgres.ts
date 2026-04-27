@@ -19,5 +19,28 @@ export async function query<T = Record<string, unknown>>(
   return result.rows as T[];
 }
 
-// Keep a named export for convenience (some models may import sql directly for template literals)
+/**
+ * Tagged template literal for safe parameterized SQL.
+ * Usage: sql`SELECT * FROM users WHERE id = ${userId}`
+ */
+export async function sql<T = Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): Promise<T[]> {
+  let text = '';
+  const params: unknown[] = [];
+
+  strings.forEach((str, i) => {
+    text += str;
+    if (i < values.length) {
+      params.push(values[i]);
+      text += `$${params.length}`;
+    }
+  });
+
+  const result = await pool.query(text, params);
+  return result.rows as T[];
+}
+
+// Keep a named export for convenience
 export { pool };
