@@ -40,30 +40,54 @@ interface ChatPanelProps {
 }
 
 // ── Web Audio notification sound (no file needed) ──────────────
+// Shared context — reusing avoids browser blocking new contexts
+let _sharedAudioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext | null {
+  try {
+    const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!_sharedAudioCtx || _sharedAudioCtx.state === 'closed') {
+      _sharedAudioCtx = new AudioCtxClass();
+    }
+    return _sharedAudioCtx;
+  } catch { return null; }
+}
+
 function playNotificationSound() {
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AudioCtx();
-    // Two-tone WhatsApp-style ping
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+
     const tones = [
       { freq: 1046.5, start: 0, duration: 0.12 },
       { freq: 1318.5, start: 0.13, duration: 0.18 },
     ];
-    tones.forEach(({ freq, start, duration }) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-      gain.gain.setValueAtTime(0, ctx.currentTime + start);
-      gain.gain.linearRampToValueAtTime(0.28, ctx.currentTime + start + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + duration + 0.05);
-    });
+
+    const playTones = () => {
+      tones.forEach(({ freq, start, duration }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+        gain.gain.setValueAtTime(0, ctx.currentTime + start);
+        gain.gain.linearRampToValueAtTime(0.28, ctx.currentTime + start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + duration + 0.05);
+      });
+    };
+
+    // Resume if suspended (browser blocks AudioContext until user interaction)
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(playTones).catch(() => {});
+    } else {
+      playTones();
+    }
   } catch { /* silent fail */ }
 }
+
 
 function timeAgo(ts: string | null | undefined): string {
   if (!ts) return "";

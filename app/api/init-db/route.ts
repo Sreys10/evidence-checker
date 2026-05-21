@@ -23,6 +23,16 @@ export async function GET() {
       )
     `;
 
+    // Safety: ensure profile_image column exists (for databases created before this was added)
+    await sql`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image TEXT
+    `;
+
+    // Safety: ensure messages table has read column
+    await sql`
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS read BOOLEAN DEFAULT FALSE
+    `.catch(() => {/* messages table may not exist yet - OK */});
+
     // Create cases table
     await sql`
       CREATE TABLE IF NOT EXISTS cases (

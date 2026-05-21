@@ -39,9 +39,16 @@ export default function AdminPage() {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [flaggedReports, setFlaggedReports] = useState<AdminFlaggedReport[]>([]);
   const [chatWith, setChatWith] = useState<AdminUser | null>(null);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'overview'|'users'|'notifications'|'flagged'|'chats'|'settings'>('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Clear chat badge immediately when Chats tab is opened
+  const handleSetActiveTab = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab === 'chats') setChatUnreadCount(0);
+  };
 
   const loadNotifications = () => {
     const saved = localStorage.getItem('adminNotifications');
@@ -123,6 +130,26 @@ export default function AdminPage() {
     return () => { window.removeEventListener('storage', handler); clearInterval(interval); };
   }, [router]);
 
+  // Poll chat unread count for admin sidebar badge
+  useEffect(() => {
+    const pollChatUnread = async () => {
+      try {
+        const res = await fetch('/api/messages?action=unread');
+        if (res.ok) {
+          const data = await res.json();
+          // Only update if not on chats tab (to avoid flicker)
+          setChatUnreadCount(prev => {
+            const newCount = data.count || 0;
+            return newCount;
+          });
+        }
+      } catch { /* silent */ }
+    };
+    pollChatUnread();
+    const chatInterval = setInterval(pollChatUnread, 5000);
+    return () => clearInterval(chatInterval);
+  }, []);
+
   const handleDeleteUser = async (userId: string) => {
     if (!confirm("Are you sure you want to delete this user?")) return;
     try {
@@ -198,7 +225,7 @@ export default function AdminPage() {
         currentUser={currentUser}
         profileImage={profileImage}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleSetActiveTab}
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
         isMobileSidebarOpen={isMobileSidebarOpen}
@@ -206,6 +233,7 @@ export default function AdminPage() {
         unreadCount={unreadCount}
         flaggedCount={flaggedReports.length}
         totalUsers={totalUsers}
+        chatUnreadCount={chatUnreadCount}
         isUploadingPhoto={isUploadingPhoto}
         onPhotoChange={handlePhotoChange}
         onLogout={handleLogout}

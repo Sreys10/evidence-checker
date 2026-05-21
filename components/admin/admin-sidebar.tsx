@@ -19,6 +19,7 @@ interface AdminSidebarProps {
   unreadCount: number;
   flaggedCount: number;
   totalUsers: number;
+  chatUnreadCount: number;
   isUploadingPhoto: boolean;
   onPhotoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onLogout: () => void;
@@ -29,17 +30,17 @@ const tabs = [
   { id: 'users' as AdminTab, label: 'Users', icon: Users, badgeKey: 'totalUsers' },
   { id: 'notifications' as AdminTab, label: 'Notifications', icon: Bell, badgeKey: 'unreadCount' },
   { id: 'flagged' as AdminTab, label: 'Flagged Reports', icon: Flag, badgeKey: 'flaggedCount' },
-  { id: 'chats' as AdminTab, label: 'Team Chat', icon: MessageSquare },
+  { id: 'chats' as AdminTab, label: 'Team Chat', icon: MessageSquare, badgeKey: 'chatUnreadCount' },
   { id: 'settings' as AdminTab, label: 'Settings', icon: Settings },
 ];
 
 export default function AdminSidebar({
   currentUser, profileImage, activeTab, setActiveTab,
   sidebarCollapsed, setSidebarCollapsed, isMobileSidebarOpen,
-  setIsMobileSidebarOpen, unreadCount, flaggedCount, totalUsers,
+  setIsMobileSidebarOpen, unreadCount, flaggedCount, totalUsers, chatUnreadCount,
   isUploadingPhoto, onPhotoChange, onLogout
 }: AdminSidebarProps) {
-  const badges: Record<string, number> = { unreadCount, flaggedCount, totalUsers };
+  const badges: Record<string, number> = { unreadCount, flaggedCount, totalUsers, chatUnreadCount };
   const initials = currentUser?.name?.split(' ').map(n=>n[0]).join('').toUpperCase() || 'A';
 
   return (
