@@ -17,76 +17,28 @@ import ThemeToggle from "@/components/theme-toggle";
 import ChatPanel from "@/components/analyst/chat-panel";
 import AdminSidebar from "@/components/admin/admin-sidebar";
 import { OverviewTab, UsersTab, NotificationsTab, FlaggedTab } from "@/components/admin/admin-tabs";
+import type { AdminUser, AdminNotification, AdminFlaggedReport } from "@/lib/types/admin";
 
-interface User {
-  _id?: string;
-  name: string;
-  email: string;
-  userType: "admin" | "analyst" | "verifier" | "guest";
-  lastLogin?: string | Date;
-  createdAt?: string | Date;
-  status?: "online" | "offline";
-}
-
-interface Notification {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  reportId?: string;
-  reportData?: {
-    fileName: string;
-    evidenceName: string;
-    status: "authentic" | "tampered";
-    confidence: number;
-    generatedDate: string;
-    format?: "PDF" | "HTML";
-    generatedBy?: { name: string; email: string };
-  };
-  fullReport?: {
-    id: string; fileName: string; evidenceName: string; imageData: string;
-    generatedDate: string; generatedBy: { name: string; email: string };
-    status: "authentic" | "tampered"; confidence: number;
-    metadata?: { camera?: string; date?: string; location?: string; software?: string };
-    anomalies?: string[];
-  };
-  timestamp: string;
-  read: boolean;
-}
-
-interface FlaggedReport {
-  id: string; reportId: string; evidenceName: string;
-  status: "authentic" | "tampered"; confidence: number;
-  generatedBy: { name: string; email: string }; flaggedAt: string; reason?: string;
-}
-
-const getTimeAgo = (date: string | Date | undefined): string => {
-  if (!date) return "Never";
-  const diff = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-  return `${Math.floor(diff / 86400)} days ago`;
-};
 
 const isUserOnline = (lastLogin: string | Date | undefined): boolean => {
   if (!lastLogin) return false;
   return (Date.now() - new Date(lastLogin).getTime()) / (1000 * 60) < 15;
 };
 
+
 export default function AdminPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("analyst");
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [flaggedReports, setFlaggedReports] = useState<FlaggedReport[]>([]);
-  const [chatWith, setChatWith] = useState<User | null>(null);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [flaggedReports, setFlaggedReports] = useState<AdminFlaggedReport[]>([]);
+  const [chatWith, setChatWith] = useState<AdminUser | null>(null);
   const [activeTab, setActiveTab] = useState<'overview'|'users'|'notifications'|'flagged'|'chats'|'settings'>('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -98,10 +50,10 @@ export default function AdminPage() {
     if (savedFlagged) setFlaggedReports(JSON.parse(savedFlagged));
   };
 
-  const flagReport = (notification: Notification) => {
+  const flagReport = (notification: AdminNotification) => {
     if (!notification.reportData) return;
     if (flaggedReports.find(r => r.reportId === notification.reportId)) return;
-    const flagged: FlaggedReport = {
+    const flagged: AdminFlaggedReport = {
       id: `flag_${Date.now()}`,
       reportId: notification.reportId || notification.id,
       evidenceName: notification.reportData.evidenceName,
@@ -127,7 +79,7 @@ export default function AdminPage() {
       const response = await fetch('/api/users');
       if (response.ok) {
         const data = await response.json();
-        setUsers(data.users.map((user: User) => ({
+        setUsers(data.users.map((user: AdminUser) => ({
           ...user,
           status: isUserOnline(user.lastLogin) ? 'online' : 'offline',
         })));
