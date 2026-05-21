@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Users, UserCheck, Clock, Shield, Bell, Flag, Search, Eye, MessageSquare, FileText, X, CheckCircle2 } from "lucide-react";
 
 type UserType = "admin" | "analyst" | "verifier" | "guest";
-type User = { _id?:string; name:string; email:string; userType:UserType; lastLogin?:string|Date; createdAt?:string|Date; status?:string; };
+type User = { _id?:string; name:string; email:string; userType:UserType; lastLogin?:string|Date; createdAt?:string|Date; status?: "online" | "offline"; };
 type Notification = { id:string; type:string; title:string; message:string; reportId?:string; reportData?:{fileName:string;evidenceName:string;status:string;confidence:number;generatedDate:string;format?:string;generatedBy?:{name:string;email:string}}; timestamp:string; read:boolean; };
 type FlaggedReport = { id:string; reportId:string; evidenceName:string; status:string; confidence:number; generatedBy:{name:string;email:string}; flaggedAt:string; };
 
