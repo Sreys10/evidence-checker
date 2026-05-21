@@ -62,11 +62,24 @@ export async function GET() {
       )
     `;
 
+    // Create messages table (for admin-analyst chat)
+    await sql`
+      CREATE TABLE IF NOT EXISTS messages (
+        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        from_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message      TEXT NOT NULL,
+        read         BOOLEAN DEFAULT FALSE,
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+
+
     return NextResponse.json(
       {
         success: true,
         message: 'Database tables created successfully!',
-        tables: ['users', 'cases', 'evidence'],
+        tables: ['users', 'cases', 'evidence', 'messages'],
       },
       { status: 200 }
     );

@@ -33,6 +33,7 @@ import {
   LayoutDashboard,
   Settings,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,8 +48,9 @@ import DashboardOverview from "@/components/analyst/dashboard-overview";
 import ThemeToggle from "@/components/theme-toggle";
 import EvidenceDetail from "@/components/analyst/evidence-detail";
 import { getUserStats } from "@/lib/evidence-storage";
+import ChatPanel from "@/components/analyst/chat-panel";
 
-type ActiveTab = "overview" | "upload" | "detect" | "metadata" | "face" | "report" | "blockchain" | "records" | "evidence-detail";
+type ActiveTab = "overview" | "upload" | "detect" | "metadata" | "face" | "report" | "blockchain" | "records" | "evidence-detail" | "chats";
 
 interface User {
   _id?: string;
@@ -79,6 +81,7 @@ export default function AnalystPage() {
     reportsGenerated: 0,
     onBlockchain: 0,
   });
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -133,6 +136,22 @@ export default function AnalystPage() {
     };
   }, [router]);
 
+  // Poll unread message count
+  useEffect(() => {
+    const pollUnread = async () => {
+      try {
+        const res = await fetch('/api/messages?action=unread');
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadMessages(data.count || 0);
+        }
+      } catch (e) { /* silent */ }
+    };
+    pollUnread();
+    const interval = setInterval(pollUnread, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleViewEvidence = (evidenceId: string) => {
     setViewingEvidenceId(evidenceId);
     setActiveTab("evidence-detail");
@@ -162,7 +181,14 @@ export default function AnalystPage() {
     { id: "report" as ActiveTab, label: "Generate Report", icon: FileText },
     { id: "records" as ActiveTab, label: "Evidence Records", icon: History },
     { id: "blockchain" as ActiveTab, label: "Blockchain", icon: LinkIcon },
+    { id: "chats" as ActiveTab, label: "Chats", icon: MessageSquare, badge: unreadMessages },
   ];
+
+  const handleTabChange = (tab: ActiveTab) => {
+    setActiveTab(tab);
+    // Immediately clear unread badge when opening Chats tab
+    if (tab === "chats") setUnreadMessages(0);
+  };
 
   return (
     <div className="h-screen flex w-full bg-background overflow-hidden">
@@ -217,15 +243,26 @@ export default function AnalystPage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group relative ${isActive
                   ? "bg-primary text-primary-foreground shadow-md"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   } ${sidebarCollapsed ? "justify-center px-2" : ""}`}
               >
-                <Icon className={`h-4 w-4 ${sidebarCollapsed ? "h-5 w-5" : ""}`} />
-                {!sidebarCollapsed && <span>{tab.label}</span>}
-
+                <div className="relative shrink-0">
+                  <Icon className={`h-4 w-4 ${sidebarCollapsed ? "h-5 w-5" : ""}`} />
+                  {'badge' in tab && (tab as {badge?: number}).badge && (tab as {badge?: number}).badge! > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      {(tab as {badge?: number}).badge! > 9 ? '9+' : (tab as {badge?: number}).badge}
+                    </span>
+                  )}
+                </div>
+                {!sidebarCollapsed && <span className="flex-1 text-left">{tab.label}</span>}
+                {!sidebarCollapsed && 'badge' in tab && (tab as {badge?: number}).badge && (tab as {badge?: number}).badge! > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full h-4 px-1.5 flex items-center justify-center min-w-[1rem]">
+                    {(tab as {badge?: number}).badge! > 9 ? '9+' : (tab as {badge?: number}).badge}
+                  </span>
+                )}
                 {/* Tooltip for collapsed state */}
                 {sidebarCollapsed && (
                   <div className="absolute left-full ml-4 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
@@ -233,6 +270,7 @@ export default function AnalystPage() {
                   </div>
                 )}
               </button>
+
             );
           })}
         </div>
@@ -289,64 +327,76 @@ export default function AnalystPage() {
           </div>
         </header>
 
-        {/* Scrollable Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                {activeTab === "overview" && (
-                  <DashboardOverview
-                    stats={stats}
-                    onNavigate={(tab) => setActiveTab(tab as ActiveTab)}
-                  />
-                )}
-                {activeTab === "upload" && (
-                  <ImageUpload
-                    onNavigateToDetect={(id?: string) => {
-                      if (id) setPreselectedEvidenceId(id);
-                      setAutoStartAnalysis(true);
-                      setActiveTab("detect");
-                    }}
-                    preselectedCaseId={preselectedCaseId}
-                  />
-                )}
-                {activeTab === "detect" && (
-                  <TamperingDetection 
-                    preselectedEvidenceId={preselectedEvidenceId} 
-                    autoStart={autoStartAnalysis}
-                    onAnalysisStarted={() => setAutoStartAnalysis(false)}
-                  />
-                )}
-                {activeTab === "metadata" && <MetadataAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
-                {activeTab === "face" && <FaceAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
-                {activeTab === "report" && <ReportGeneration />}
-                {activeTab === "evidence-detail" && viewingEvidenceId && (
-                  <EvidenceDetail
-                    evidenceId={viewingEvidenceId}
-                    onBack={() => setActiveTab("records")}
-                    onAction={handleEvidenceAction}
-                  />
-                )}
-                {activeTab === "records" && (
-                  <EvidenceRecords
-                    onQuickAdd={(caseId) => {
-                      setPreselectedCaseId(caseId);
-                      setActiveTab("upload");
-                    }}
-                    onView={handleViewEvidence}
-                  />
-                )}
-                {activeTab === "blockchain" && <BlockchainUpload currentUser={currentUser || undefined} />}
-              </motion.div>
-            </AnimatePresence>
+        {/* Chats Tab — full height, no padding */}
+        {activeTab === "chats" && currentUser && (
+          <div className="flex-1 overflow-hidden">
+            <ChatPanel
+              currentUserId={currentUser._id || ""}
+              currentUserName={currentUser.name}
+            />
           </div>
-        </main>
+        )}
+
+        {/* All other tabs — scrollable with padding */}
+        {activeTab !== "chats" && (
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {activeTab === "overview" && (
+                    <DashboardOverview
+                      stats={stats}
+                      onNavigate={(tab) => setActiveTab(tab as ActiveTab)}
+                    />
+                  )}
+                  {activeTab === "upload" && (
+                    <ImageUpload
+                      onNavigateToDetect={(id?: string) => {
+                        if (id) setPreselectedEvidenceId(id);
+                        setAutoStartAnalysis(true);
+                        setActiveTab("detect");
+                      }}
+                      preselectedCaseId={preselectedCaseId}
+                    />
+                  )}
+                  {activeTab === "detect" && (
+                    <TamperingDetection 
+                      preselectedEvidenceId={preselectedEvidenceId} 
+                      autoStart={autoStartAnalysis}
+                      onAnalysisStarted={() => setAutoStartAnalysis(false)}
+                    />
+                  )}
+                  {activeTab === "metadata" && <MetadataAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
+                  {activeTab === "face" && <FaceAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
+                  {activeTab === "report" && <ReportGeneration />}
+                  {activeTab === "evidence-detail" && viewingEvidenceId && (
+                    <EvidenceDetail
+                      evidenceId={viewingEvidenceId}
+                      onBack={() => setActiveTab("records")}
+                      onAction={handleEvidenceAction}
+                    />
+                  )}
+                  {activeTab === "records" && (
+                    <EvidenceRecords
+                      onQuickAdd={(caseId) => {
+                        setPreselectedCaseId(caseId);
+                        setActiveTab("upload");
+                      }}
+                      onView={handleViewEvidence}
+                    />
+                  )}
+                  {activeTab === "blockchain" && <BlockchainUpload currentUser={currentUser || undefined} />}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </main>
+        )}
       </div>
 
       {/* ═══════════ SETTINGS SHEET ═══════════ */}
@@ -387,6 +437,12 @@ export default function AnalystPage() {
                             });
                             if (res.ok) {
                               setProfileImage(result);
+                              // Cache in localStorage as fallback
+                              if (currentUser?._id || currentUser?.email) {
+                                localStorage.setItem(`profileImage_${currentUser._id || currentUser.email}`, result);
+                              }
+                            } else {
+                              console.error("Failed to upload profile photo to API");
                             }
                           } catch (e) {
                             console.error("Failed to upload profile photo to API:", e);
