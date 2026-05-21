@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,7 +50,7 @@ interface Message {
   fromUserType?: string;
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewUserId = searchParams.get('viewUser');
@@ -529,3 +529,12 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">Loading profile...</div>}>
+      <ProfileContent />
+    </Suspense>
+  );
+}
+
