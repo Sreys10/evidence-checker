@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Users, UserCheck, Clock, Shield, Bell, Flag, Search, Eye, MessageSquare, FileText, X, CheckCircle2 } from "lucide-react";
 
-type User = { _id?:string; name:string; email:string; userType:string; lastLogin?:string|Date; createdAt?:string|Date; status?:string; };
+type UserType = "admin" | "analyst" | "verifier" | "guest";
+type User = { _id?:string; name:string; email:string; userType:UserType; lastLogin?:string|Date; createdAt?:string|Date; status?:string; };
 type Notification = { id:string; type:string; title:string; message:string; reportId?:string; reportData?:{fileName:string;evidenceName:string;status:string;confidence:number;generatedDate:string;format?:string;generatedBy?:{name:string;email:string}}; timestamp:string; read:boolean; };
 type FlaggedReport = { id:string; reportId:string; evidenceName:string; status:string; confidence:number; generatedBy:{name:string;email:string}; flaggedAt:string; };
 
@@ -94,7 +96,7 @@ interface UsersTabProps {
   filterType: string;
   setFilterType: (v:string) => void;
   selectedUser: User | null;
-  setSelectedUser: (u:User|null) => void;
+  setSelectedUser: React.Dispatch<React.SetStateAction<User | null>>;
   onViewProfile: (u:User) => void;
   onMessageUser: (u:User) => void;
   onDeleteUser: (id:string) => void;

@@ -276,7 +276,7 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
             <div className="shrink-0">
               <Avatar className="h-10 w-10">
                 {newMsgAlert.profileImage ? (
-                  <img src={newMsgAlert.profileImage} className="h-full w-full object-cover rounded-full" />
+                  <img src={newMsgAlert.profileImage} alt={newMsgAlert.contactName} className="h-full w-full object-cover rounded-full" />
                 ) : (
                   <AvatarFallback className={`bg-gradient-to-br ${newMsgAlert.userType === 'admin' ? 'from-red-500 to-orange-600' : 'from-blue-500 to-indigo-600'} text-white text-sm font-bold`}>
                     {getInitials(newMsgAlert.contactName)}

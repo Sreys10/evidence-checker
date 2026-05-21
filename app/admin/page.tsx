@@ -291,7 +291,7 @@ export default function AdminPage() {
             <div className="relative cursor-pointer" onClick={() => setActiveTab('settings')}>
               <Avatar className="h-8 w-8 ring-2 ring-primary/20">
                 {profileImage
-                  ? <img src={profileImage} alt="profile" className="h-full w-full object-cover rounded-full" />
+                  ? <img src={profileImage} alt="Profile" className="h-full w-full object-cover rounded-full" />
                   : <AvatarFallback className="bg-gradient-to-br from-red-500 to-orange-600 text-white text-xs font-bold">{currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'A'}</AvatarFallback>}
               </Avatar>
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 rounded-full border-2 border-background" />
@@ -340,7 +340,7 @@ export default function AdminPage() {
                       <div className="relative shrink-0">
                         <Avatar className="h-20 w-20 ring-2 ring-border">
                           {profileImage
-                            ? <img src={profileImage} className="h-full w-full object-cover rounded-full" />
+                            ? <img src={profileImage} alt="Profile" className="h-full w-full object-cover rounded-full" />
                             : <AvatarFallback className="bg-gradient-to-br from-red-500 to-orange-600 text-white text-2xl font-bold">{currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'A'}</AvatarFallback>}
                         </Avatar>
                         <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/90 shadow-lg">
