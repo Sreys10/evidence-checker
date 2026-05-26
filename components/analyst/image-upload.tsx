@@ -69,7 +69,7 @@ interface UploadedFile {
 }
 
 interface ImageUploadProps {
-  onNavigateToDetect?: (evidenceId?: string) => void;
+  onNavigateToDetect?: (evidenceId?: string, type?: string) => void;
   preselectedCaseId?: string | null;
 }
 
