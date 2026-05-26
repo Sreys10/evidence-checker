@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, Users, Bell, MessageSquare, Settings, LogOut, User, ChevronLeft, ChevronRight, LayoutDashboard, Flag, Camera, History } from "lucide-react";
 import Link from "next/link";
 
-type AdminTab = 'overview'|'users'|'notifications'|'flagged'|'chats'|'settings'|'records';
+type AdminTab = 'overview'|'users'|'notifications'|'flagged'|'chats'|'settings'|'records'|'evidence-detail';
 
 interface AdminSidebarProps {
   currentUser: {_id?:string;name:string;email:string} | null;
