@@ -13,15 +13,27 @@ interface TabsContextValue {
 const TabsContext = React.createContext<TabsContextValue | undefined>(undefined);
 
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
-    defaultValue: string;
+    defaultValue?: string;
+    value?: string;
     onValueChange?: (value: string) => void;
 }
 
-export function Tabs({ defaultValue, onValueChange, children, className, ...props }: TabsProps) {
-    const [activeTab, setActiveTab] = React.useState(defaultValue);
+export function Tabs({ defaultValue, value, onValueChange, children, className, ...props }: TabsProps) {
+    const [localActiveTab, setLocalActiveTab] = React.useState(value ?? defaultValue ?? "");
+
+    // Sync local state if controlled value changes
+    React.useEffect(() => {
+        if (value !== undefined) {
+            setLocalActiveTab(value);
+        }
+    }, [value]);
+
+    const activeTab = value !== undefined ? value : localActiveTab;
 
     const handleTabChange = (id: string) => {
-        setActiveTab(id);
+        if (value === undefined) {
+            setLocalActiveTab(id);
+        }
         onValueChange?.(id);
     };
 
