@@ -25,7 +25,6 @@
     "framer-motion": "^12.23.24",
     "jose": "^6.2.2",
     "lucide-react": "^0.475.0",
-    "mongodb": "^7.0.0",
     "next": "15.5.9",
     "next-themes": "^0.4.4",
     "radix-ui": "^1.4.3",

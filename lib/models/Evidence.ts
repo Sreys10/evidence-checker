@@ -121,16 +121,25 @@ export async function getEvidenceByUser(userId: string): Promise<Evidence[]> {
   return result.map((row) => mapRow(row as Record<string, unknown>));
 }
 
-export async function getEvidenceById(id: string, userId: string): Promise<Evidence | null> {
+export async function getAllEvidenceAdmin(): Promise<Evidence[]> {
   const result = await sql`
+    SELECT * FROM evidence ORDER BY upload_date DESC
+  `;
+  return result.map((row) => mapRow(row as Record<string, unknown>));
+}
+
+export async function getEvidenceById(id: string, userId?: string): Promise<Evidence | null> {
+  const result = userId ? await sql`
     SELECT * FROM evidence WHERE id = ${id} AND user_id = ${userId} LIMIT 1
+  ` : await sql`
+    SELECT * FROM evidence WHERE id = ${id} LIMIT 1
   `;
   return result.length > 0 ? mapRow(result[0] as Record<string, unknown>) : null;
 }
 
 export async function updateEvidence(
   id: string,
-  userId: string,
+  userId: string | undefined,
   updateData: Partial<Evidence>
 ): Promise<boolean> {
   // Remove protected fields
@@ -185,11 +194,15 @@ export async function updateEvidence(
 
   if (setClauses.length === 0) return true;
 
-  params.push(id, userId);
+  params.push(id);
+  if (userId) {
+    params.push(userId);
+  }
+
   const queryText = `
     UPDATE evidence
     SET ${setClauses.join(', ')}
-    WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
+    WHERE id = $${paramIndex} ${userId ? `AND user_id = $${paramIndex + 1}` : ''}
     RETURNING id
   `;
 
@@ -197,9 +210,11 @@ export async function updateEvidence(
   return rows.length > 0;
 }
 
-export async function deleteEvidence(id: string, userId: string): Promise<boolean> {
-  const result = await sql`
+export async function deleteEvidence(id: string, userId?: string): Promise<boolean> {
+  const result = userId ? await sql`
     DELETE FROM evidence WHERE id = ${id} AND user_id = ${userId} RETURNING id
+  ` : await sql`
+    DELETE FROM evidence WHERE id = ${id} RETURNING id
   `;
   return Array.isArray(result) && result.length > 0;
 }

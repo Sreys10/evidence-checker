@@ -38,6 +38,12 @@ interface FaceMatch {
     };
   } | null;
   face_image_base64: string;
+  analysis?: {
+    age: number;
+    dominant_gender: string;
+    dominant_emotion: string;
+    dominant_race: string;
+  };
   error?: string;
 }
 
@@ -413,17 +419,23 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
                               <p className="text-xs text-muted-foreground mb-1 text-center">
                                 {match.match_found ? "Database Match" : "No Match"}
                               </p>
-                              {match.match_found && match.match_info?.original_image_base64 ? (
-                                <img
-                                  src={match.match_info.original_image_base64}
-                                  alt="Database image"
-                                  className="w-full h-32 object-cover rounded border"
-                                />
-                              ) : (
-                                <div className="w-full h-32 bg-muted rounded border flex items-center justify-center">
-                                  <User className="h-8 w-8 text-muted-foreground" />
-                                </div>
-                              )}
+                              {(() => {
+                                let imgSrc = match.match_info?.original_image_base64;
+                                if (imgSrc && !imgSrc.startsWith("data:")) {
+                                  imgSrc = `data:image/jpeg;base64,${imgSrc}`;
+                                }
+                                return match.match_found && imgSrc ? (
+                                  <img
+                                    src={imgSrc}
+                                    alt="Database image"
+                                    className="w-full h-32 object-cover rounded border"
+                                  />
+                                ) : (
+                                  <div className="w-full h-32 bg-muted rounded border flex items-center justify-center">
+                                    <User className="h-8 w-8 text-muted-foreground" />
+                                  </div>
+                                );
+                              })()}
                               <Badge
                                 className={`absolute top-8 right-2 ${match.match_found
                                   ? "bg-green-500"
@@ -440,43 +452,43 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
                             </div>
                           </div>
                           <CardContent className="p-4">
-                            <p className="font-medium mb-2">
+                            <p className="font-medium mb-2 text-base">
                               Face {match.face_number}
                             </p>
                             {match.match_found && match.match_info ? (
                               <div className="space-y-2 text-sm">
                                 <div>
-                                  <span className="font-medium">Person ID:</span>{" "}
-                                  <span className="text-primary">{match.match_info.person_name}</span>
+                                  <span className="font-medium text-muted-foreground">Person ID:</span>{" "}
+                                  <span className="text-primary font-semibold">{match.match_info.person_name}</span>
                                 </div>
                                 {match.match_info.metadata?.name && (
                                   <div>
-                                    <span className="font-medium">Name:</span>{" "}
-                                    {match.match_info.metadata.name}
+                                    <span className="font-medium text-muted-foreground">Name:</span>{" "}
+                                    <span className="text-card-foreground">{match.match_info.metadata.name}</span>
                                   </div>
                                 )}
                                 {match.match_info.metadata?.age && (
                                   <div>
-                                    <span className="font-medium">Age:</span>{" "}
-                                    {match.match_info.metadata.age}
+                                    <span className="font-medium text-muted-foreground">Age:</span>{" "}
+                                    <span className="text-card-foreground">{match.match_info.metadata.age}</span>
                                   </div>
                                 )}
                                 {match.match_info.metadata?.email && (
                                   <div>
-                                    <span className="font-medium">Email:</span>{" "}
-                                    {match.match_info.metadata.email}
+                                    <span className="font-medium text-muted-foreground">Email:</span>{" "}
+                                    <span className="text-card-foreground">{match.match_info.metadata.email}</span>
                                   </div>
                                 )}
                                 {match.match_info.metadata?.phone && (
                                   <div>
-                                    <span className="font-medium">Phone:</span>{" "}
-                                    {match.match_info.metadata.phone}
+                                    <span className="font-medium text-muted-foreground">Phone:</span>{" "}
+                                    <span className="text-card-foreground">{match.match_info.metadata.phone}</span>
                                   </div>
                                 )}
                                 <div className="pt-2 border-t">
                                   <p className="text-xs text-muted-foreground">
                                     <span className="font-medium">Similarity:</span>{" "}
-                                    {((1 - match.match_info.distance) * 100).toFixed(2)}%
+                                    <span className="text-green-500 font-semibold">{((1 - match.match_info.distance) * 100).toFixed(2)}%</span>
                                   </p>
                                   <p className="text-xs text-muted-foreground">
                                     <span className="font-medium">Distance:</span>{" "}
@@ -490,11 +502,15 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
                                 )}
                               </div>
                             ) : (
-                              <p className="text-sm text-muted-foreground">
-                                No match found in database
-                                {match.error && ` - ${match.error}`}
-                              </p>
+                              <div className="bg-muted/30 p-2.5 rounded border border-dashed text-center">
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  No match found in database
+                                  {match.error && ` - ${match.error}`}
+                                </p>
+                              </div>
                             )}
+
+
                           </CardContent>
                         </Card>
                       ))}

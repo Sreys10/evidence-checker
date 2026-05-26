@@ -50,4 +50,6 @@ export interface AdminFlaggedReport {
   generatedBy: { name: string; email: string };
   flaggedAt: string;
   reason?: string;
+  reportData?: any;
+  fullReport?: any;
 }

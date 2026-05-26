@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, UserCheck, Clock, Shield, Bell, Flag, Search, Eye, MessageSquare, FileText, X, CheckCircle2 } from "lucide-react";
+import { Users, UserCheck, Clock, Shield, Bell, Flag, Search, Eye, MessageSquare, FileText, X, CheckCircle2, Download } from "lucide-react";
 import type { AdminUser, AdminNotification, AdminFlaggedReport } from "@/lib/types/admin";
+import { downloadReport, type ReportData } from "@/lib/report-generator";
 
 const getTimeAgo = (date: string | Date | undefined) => {
   if (!date) return "Never";
@@ -22,6 +23,144 @@ const getUserTypeColor = (t: string) => {
   if (t === "analyst") return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20";
   if (t === "verifier") return "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20";
   return "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20";
+};
+
+export const handleDownloadReport = (n: { reportData?: any; fullReport?: any; reportId?: string; id: string; timestamp?: string }) => {
+  if (!n.reportData) return;
+  
+  if (n.reportData.isVideo && n.reportData.videoResult) {
+    const result = n.reportData.videoResult;
+    const fileName = n.reportData.fileName || "video_evidence.mp4";
+    const reportId = n.reportId || n.id;
+    const analyst = n.reportData.generatedBy || { name: "System", email: "system@evicheck.local" };
+    const formattedDate = new Date(n.reportData.generatedDate || n.timestamp || new Date()).toLocaleString();
+    
+    const frameRows = result.frames.map((f: any, i: number) => `
+      <tr>
+        <td>Frame ${i + 1}</td>
+        <td>${(f.aiGeneratedScore * 100).toFixed(1)}%</td>
+        <td>${f.aiGeneratedScore > 0.5 ? "AI-Generated" : "Authentic"}</td>
+      </tr>
+    `).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Forensics Report - ${fileName}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; background: #f9fafb; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 40px 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 28px; font-weight: 800; }
+    .header p { margin: 8px 0 0 0; opacity: 0.9; font-size: 14px; }
+    .content { padding: 30px; }
+    .section { margin-bottom: 30px; }
+    .section-title { font-size: 18px; font-weight: 700; color: #1e3a8a; margin-bottom: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+    th { background-color: #f3f4f6; font-weight: 600; }
+    .verdict-banner { display: flex; align-items: center; gap: 15px; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid; }
+    .verdict-banner.authentic { background-color: #f0fdf4; border-color: #86efac; color: #16a34a; }
+    .verdict-banner.tampered { background-color: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+    .stats-grid { display: grid; grid-template-cols: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
+    .stat-card { background: #f3f4f6; padding: 15px; border-radius: 8px; }
+    .stat-card p.val { font-size: 20px; font-weight: 700; margin: 5px 0 0 0; color: #111827; }
+    .stat-card p.lbl { font-size: 12px; color: #4b5563; margin: 0; }
+    .footer { margin-top: 50px; border-top: 1px solid #e5e7eb; padding-top: 20px; font-size: 12px; color: #6b7280; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Video Forensics Report</h1>
+      <p>Report ID: ${reportId} • Generated: ${formattedDate}</p>
+    </div>
+    <div class="content">
+      <div class="section">
+        <div class="verdict-banner ${result.isAiGenerated ? 'tampered' : 'authentic'}">
+          <div>
+            <h2 style="margin: 0; font-size: 20px; font-weight: 700;">Verdict: ${result.verdict}</h2>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">Confidence Level: ${result.confidence.toFixed(1)}%</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2 class="section-title">Case Metadata</h2>
+        <table style="margin-bottom: 20px;">
+          <tr><td style="width: 150px; font-weight: 600;">Evidence Label</td><td>${fileName}</td></tr>
+          <tr><td style="font-weight: 600;">Analyst Name</td><td>${analyst.name}</td></tr>
+          <tr><td style="font-weight: 600;">Analyst Email</td><td>${analyst.email}</td></tr>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2 class="section-title">Forensic Statistics</h2>
+        <div class="stats-grid">
+          <div class="stat-card"><p class="lbl">Sampled Frames</p><p class="val">${result.totalFrames}</p></div>
+          <div class="stat-card"><p class="lbl">AI-Generated Frames</p><p class="val">${result.aiGeneratedFrames}</p></div>
+          <div class="stat-card"><p class="lbl">Average AI Score</p><p class="val">${(result.avgAiScore * 100).toFixed(1)}%</p></div>
+          <div class="stat-card"><p class="lbl">Peak AI Score</p><p class="val">${(result.maxAiScore * 100).toFixed(1)}%</p></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 class="section-title">Per-Frame Analysis</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Frame</th>
+              <th>AI Probability</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${frameRows}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="footer">
+        <p><strong>EviCheck Digital Forensics Platform</strong></p>
+        <p>This is an automated forensic analysis report generated from SightEngine video detection models.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Report_${reportId}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } else {
+    // Standard image report
+    const fullReport = n.fullReport || n.reportData;
+    if (fullReport) {
+      const reportData: ReportData = {
+        id: fullReport.id || n.reportId || n.id,
+        fileName: fullReport.fileName || n.reportData.fileName,
+        evidenceName: fullReport.evidenceName || n.reportData.evidenceName,
+        imageData: fullReport.imageData || "",
+        generatedDate: fullReport.generatedDate || n.timestamp || new Date().toISOString(),
+        generatedBy: fullReport.generatedBy || n.reportData.generatedBy || { name: 'Analyst', email: '' },
+        status: fullReport.status || n.reportData.status,
+        confidence: fullReport.confidence || n.reportData.confidence,
+        metadata: fullReport.metadata,
+        anomalies: fullReport.anomalies,
+        aiDetection: fullReport.aiDetection,
+        faceDetection: fullReport.faceDetection,
+      };
+      downloadReport(reportData, "HTML");
+    }
+  }
 };
 
 // ── OVERVIEW ──────────────────────────────────────────
@@ -214,6 +353,7 @@ export function NotificationsTab({ notifications, onMarkRead, onMarkAllRead, onF
               </div>
               <div className="flex gap-1 shrink-0">
                 {!n.read && <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark read" onClick={() => onMarkRead(n.id)}><CheckCircle2 className="h-3.5 w-3.5" /></Button>}
+                {n.reportData && <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-600" title="Download Report" onClick={() => handleDownloadReport(n)}><Download className="h-3.5 w-3.5" /></Button>}
                 {n.reportData && <Button variant="ghost" size="icon" className="h-7 w-7 text-orange-500 hover:text-orange-600" title="Flag" onClick={() => onFlag(n)}><Flag className="h-3.5 w-3.5" /></Button>}
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Dismiss" onClick={() => onDismiss(n.id)}><X className="h-3.5 w-3.5" /></Button>
               </div>
@@ -249,7 +389,14 @@ export function FlaggedTab({ flaggedReports, onRemove }: FlaggedTabProps) {
                 <p className="text-xs text-muted-foreground mt-1">Confidence: {r.confidence.toFixed(1)}% · By: {r.generatedBy.name}</p>
                 <p className="text-[10px] text-muted-foreground">Flagged: {new Date(r.flaggedAt).toLocaleString()}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:text-destructive" onClick={() => onRemove(r.id)}><X className="h-4 w-4" /></Button>
+              <div className="flex gap-1 shrink-0">
+                {r.reportData && (
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-600" title="Download Report" onClick={() => handleDownloadReport(r)}>
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:text-destructive" onClick={() => onRemove(r.id)}><X className="h-4 w-4" /></Button>
+              </div>
             </CardContent>
           </Card>
         </motion.div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Backend service URL - set via environment variable
-const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost:5000';
+const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost:5001';
 
 // Log backend URL in development (not in production for security)
 if (process.env.NODE_ENV === 'development') {

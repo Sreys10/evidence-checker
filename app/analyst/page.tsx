@@ -34,6 +34,7 @@ import {
   Settings,
   AlertTriangle,
   MessageSquare,
+  Video,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -49,8 +50,9 @@ import ThemeToggle from "@/components/theme-toggle";
 import EvidenceDetail from "@/components/analyst/evidence-detail";
 import { getUserStats } from "@/lib/evidence-storage";
 import ChatPanel from "@/components/analyst/chat-panel";
+import VideoDetection from "@/components/analyst/video-detection";
 
-type ActiveTab = "overview" | "upload" | "detect" | "metadata" | "face" | "report" | "blockchain" | "records" | "evidence-detail" | "chats";
+type ActiveTab = "overview" | "upload" | "detect" | "video" | "metadata" | "face" | "report" | "blockchain" | "records" | "evidence-detail" | "chats";
 
 interface User {
   _id?: string;
@@ -73,6 +75,7 @@ export default function AnalystPage() {
   const [preselectedCaseId, setPreselectedCaseId] = useState<string | null>(null);
   const [viewingEvidenceId, setViewingEvidenceId] = useState<string | null>(null);
   const [preselectedEvidenceId, setPreselectedEvidenceId] = useState<string | null>(null);
+  const [evidenceDetailInitialTab, setEvidenceDetailInitialTab] = useState<string>("details");
   const [autoStartAnalysis, setAutoStartAnalysis] = useState(false);
   const [stats, setStats] = useState({
     totalEvidence: 0,
@@ -154,6 +157,7 @@ export default function AnalystPage() {
 
   const handleViewEvidence = (evidenceId: string) => {
     setViewingEvidenceId(evidenceId);
+    setEvidenceDetailInitialTab("details");
     setActiveTab("evidence-detail");
   };
 
@@ -176,6 +180,7 @@ export default function AnalystPage() {
     { id: "overview" as ActiveTab, label: "Overview", icon: LayoutDashboard },
     { id: "upload" as ActiveTab, label: "Upload Evidence", icon: Upload },
     { id: "detect" as ActiveTab, label: "Detect Tampering", icon: Search },
+    { id: "video" as ActiveTab, label: "Video Detection", icon: Video },
     { id: "metadata" as ActiveTab, label: "Metadata Analysis", icon: FileSearch },
     { id: "face" as ActiveTab, label: "Face Analysis", icon: Fingerprint },
     { id: "report" as ActiveTab, label: "Generate Report", icon: FileText },
@@ -357,10 +362,12 @@ export default function AnalystPage() {
                   )}
                   {activeTab === "upload" && (
                     <ImageUpload
-                      onNavigateToDetect={(id?: string) => {
-                        if (id) setPreselectedEvidenceId(id);
-                        setAutoStartAnalysis(true);
-                        setActiveTab("detect");
+                      onNavigateToDetect={(id?: string, type?: string) => {
+                        if (id) {
+                          setViewingEvidenceId(id);
+                          setEvidenceDetailInitialTab(type?.startsWith("video/") ? "video" : "detect");
+                          setActiveTab("evidence-detail");
+                        }
                       }}
                       preselectedCaseId={preselectedCaseId}
                     />
@@ -373,11 +380,19 @@ export default function AnalystPage() {
                     />
                   )}
                   {activeTab === "metadata" && <MetadataAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
+                  {activeTab === "video" && (
+                    <VideoDetection 
+                      preselectedEvidenceId={preselectedEvidenceId} 
+                      autoStart={autoStartAnalysis}
+                      onAnalysisStarted={() => setAutoStartAnalysis(false)}
+                    />
+                  )}
                   {activeTab === "face" && <FaceAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
                   {activeTab === "report" && <ReportGeneration />}
                   {activeTab === "evidence-detail" && viewingEvidenceId && (
                     <EvidenceDetail
                       evidenceId={viewingEvidenceId}
+                      initialTab={evidenceDetailInitialTab}
                       onBack={() => setActiveTab("records")}
                       onAction={handleEvidenceAction}
                     />

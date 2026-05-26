@@ -15,14 +15,19 @@ import {
     ZoomIn,
     ZoomOut,
     Eye,
-    ChevronLeft
+    ChevronLeft,
+    Check,
+    X,
+    Edit2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card"; // Keep Card for non-embedded parts if needed, but mainly for consistent style
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/custom-tabs";
-import { getEvidenceByCase, getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
+import { Input } from "@/components/ui/input";
+import { getEvidenceByCase, getAllEvidence, renameEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 import TamperingDetection from "./tampering-detection";
+import VideoDetection from "./video-detection";
 import MetadataAnalysis from "./metadata-analysis";
 import FaceAnalysis from "./face-analysis";
 import { motion } from "framer-motion";
@@ -33,14 +38,29 @@ import { Loader2, ShieldCheck, Link as LinkIcon } from "lucide-react";
 
 interface EvidenceDetailProps {
     evidenceId: string;
+    initialTab?: string;
     onBack: () => void;
     onAction: (action: 'detect' | 'metadata' | 'face' | 'report', evidenceId: string) => void;
 }
 
-export default function EvidenceDetail({ evidenceId, onBack, onAction }: EvidenceDetailProps) {
+export default function EvidenceDetail({ evidenceId, initialTab, onBack, onAction }: EvidenceDetailProps) {
     const [evidence, setEvidence] = useState<StoredEvidence | null>(null);
     const [zoom, setZoom] = useState(1);
     const [isPreserving, setIsPreserving] = useState(false);
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState("");
+    const [activeTab, setActiveTab] = useState(initialTab || "details");
+
+    const handleRename = async () => {
+        if (!renameValue.trim() || !evidence) return;
+        const success = await renameEvidence((evidence.id || (evidence as any)._id) as string, renameValue.trim());
+        if (success) {
+            setEvidence(prev => prev ? { ...prev, evidenceName: renameValue.trim() } : null);
+            setIsRenaming(false);
+        } else {
+            alert("Failed to rename evidence. Please try again.");
+        }
+    };
 
     // Helper to convert base64 to File
     const dataURLtoFile = async (dataUrl: string, filename: string): Promise<File> => {
@@ -90,10 +110,14 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
         const loadEvidence = async () => {
             const all = await getAllEvidence();
             const found = all.find(e => (e.id || (e as any)._id) === evidenceId);
-            if (found) setEvidence(found);
+            if (found) {
+                setEvidence(found);
+                setRenameValue(found.evidenceName || found.fileName);
+                setActiveTab(initialTab || "details");
+            }
         };
         loadEvidence();
-    }, [evidenceId]);
+    }, [evidenceId, initialTab]);
 
     if (!evidence) {
         return (
@@ -121,17 +145,47 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
                     <Button variant="ghost" size="icon" onClick={onBack} className="hover:bg-muted/60 transition-colors">
                         <ChevronLeft className="h-5 w-5" />
                     </Button>
-                    <div>
-                        <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-3">
-                            {evidence.evidenceName || evidence.fileName}
-                            {evidence.caseNumber && <Badge variant="outline" className="font-mono text-xs">{evidence.caseNumber}</Badge>}
-                        </h2>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(evidence.uploadDate).toLocaleDateString()}</span>
-                            <span className="w-1 h-1 rounded-full bg-border" />
-                            <span className="flex items-center gap-1"><Hash className="h-3 w-3" /> {evidence.size}</span>
+                    {isRenaming ? (
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleRename();
+                                    if (e.key === 'Escape') {
+                                        setIsRenaming(false);
+                                        setRenameValue(evidence.evidenceName || evidence.fileName);
+                                    }
+                                }}
+                                className="h-8 max-w-xs text-sm font-semibold focus-visible:ring-primary"
+                                autoFocus
+                            />
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={handleRename}>
+                                <Check className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => {
+                                setIsRenaming(false);
+                                setRenameValue(evidence.evidenceName || evidence.fileName);
+                            }}>
+                                <X className="h-4 w-4" />
+                            </Button>
                         </div>
-                    </div>
+                    ) : (
+                        <div>
+                            <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-3 group/title">
+                                {evidence.evidenceName || evidence.fileName}
+                                <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover/title:opacity-100 transition-opacity rounded-full" onClick={() => setIsRenaming(true)}>
+                                    <Edit2 className="h-3 w-3 text-muted-foreground" />
+                                </Button>
+                                {evidence.caseNumber && <Badge variant="outline" className="font-mono text-xs">{evidence.caseNumber}</Badge>}
+                            </h2>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(evidence.uploadDate).toLocaleDateString()}</span>
+                                <span className="w-1 h-1 rounded-full bg-border" />
+                                <span className="flex items-center gap-1"><Hash className="h-3 w-3" /> {evidence.size}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={handleDownload} className="h-8 gap-2">
@@ -179,11 +233,19 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
                     <div className="flex-1 overflow-auto flex items-center justify-center p-8 bg-[url('/grid-pattern.svg')] bg-center">
                         {/* Placeholder for grid pattern if missing, fallback to nice gray */}
                         <div className="relative shadow-2xl shadow-black/5 rounded-lg overflow-hidden transition-transform duration-200" style={{ transform: `scale(${zoom})` }}>
-                            <img
-                                src={evidence.imageData}
-                                alt={evidence.fileName}
-                                className="max-h-[70vh] w-auto object-contain"
-                            />
+                            {evidence.type?.startsWith('video/') ? (
+                                <video
+                                    src={evidence.imageData}
+                                    controls
+                                    className="max-h-[70vh] w-full object-contain bg-black"
+                                />
+                            ) : (
+                                <img
+                                    src={evidence.imageData}
+                                    alt={evidence.fileName}
+                                    className="max-h-[70vh] w-auto object-contain"
+                                />
+                            )}
                         </div>
                     </div>
                     <div className="absolute bottom-3 left-4 text-xs font-mono text-muted-foreground bg-background/80 backdrop-blur px-2 py-1 rounded border">
@@ -193,13 +255,22 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
 
                 {/* Right Panel: Analysis Tools (4 Columns) */}
                 <div className="lg:col-span-4 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/60 shadow-sm overflow-hidden">
-                    <Tabs defaultValue="details" className="flex flex-col h-full">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                         <div className="px-4 pt-4 pb-2 border-b border-border/40 bg-muted/5">
-                            <TabsList className="w-full grid grid-cols-4 bg-muted/50 p-1">
+                            <TabsList className={`w-full grid bg-muted/50 p-1 ${evidence.type?.startsWith('video/') ? 'grid-cols-3' : 'grid-cols-4'}`}>
                                 <TabsTrigger value="details">Info</TabsTrigger>
-                                <TabsTrigger value="detect">Tamper</TabsTrigger>
-                                <TabsTrigger value="metadata">Meta</TabsTrigger>
-                                <TabsTrigger value="face">Face</TabsTrigger>
+                                {evidence.type?.startsWith('video/') ? (
+                                    <>
+                                        <TabsTrigger value="video">Video AI</TabsTrigger>
+                                        <TabsTrigger value="metadata">Meta</TabsTrigger>
+                                    </>
+                                ) : (
+                                    <>
+                                        <TabsTrigger value="detect">Tamper</TabsTrigger>
+                                        <TabsTrigger value="metadata">Meta</TabsTrigger>
+                                        <TabsTrigger value="face">Face</TabsTrigger>
+                                    </>
+                                )}
                             </TabsList>
                         </div>
 
@@ -286,12 +357,31 @@ export default function EvidenceDetail({ evidenceId, onBack, onAction }: Evidenc
                                 </div>
                             </TabsContent>
 
+                            {/* Tab Content: Video AI */}
+                            {evidence.type?.startsWith('video/') && (
+                                <TabsContent value="video" className="mt-0 h-full">
+                                    <div className="p-4">
+                                        <VideoDetection 
+                                            preselectedEvidenceId={evidenceId} 
+                                            isEmbedded={true} 
+                                            autoStart={evidence.status !== 'complete'} 
+                                        />
+                                    </div>
+                                </TabsContent>
+                            )}
+
                             {/* Tab Content: Tampering */}
-                            <TabsContent value="detect" className="mt-0 h-full">
-                                <div className="p-4">
-                                    <TamperingDetection preselectedEvidenceId={evidenceId} isEmbedded={true} />
-                                </div>
-                            </TabsContent>
+                            {!evidence.type?.startsWith('video/') && (
+                                <TabsContent value="detect" className="mt-0 h-full">
+                                    <div className="p-4">
+                                        <TamperingDetection 
+                                            preselectedEvidenceId={evidenceId} 
+                                            isEmbedded={true} 
+                                            autoStart={evidence.status !== 'complete'} 
+                                        />
+                                    </div>
+                                </TabsContent>
+                            )}
 
                             {/* Tab Content: Metadata */}
                             <TabsContent value="metadata" className="mt-0 h-full">

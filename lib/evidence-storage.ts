@@ -155,15 +155,22 @@ export async function getAllCases(userId?: string): Promise<StoredCase[]> {
   }
 }
 
-export async function saveCase(c: StoredCase, userId?: string): Promise<void> {
+export async function saveCase(c: StoredCase, userId?: string): Promise<StoredCase | null> {
   try {
-    await fetch('/api/cases', {
+    const res = await fetch('/api/cases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(c),
     });
+    if (res.ok) {
+      const data = await res.json();
+      const created = data.case;
+      return { ...created, id: created._id || created.id };
+    }
+    return null;
   } catch (error) {
     console.error('Error saving case:', error);
+    return null;
   }
 }
 

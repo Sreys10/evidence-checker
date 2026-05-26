@@ -2,10 +2,10 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Users, Bell, MessageSquare, Settings, LogOut, User, ChevronLeft, ChevronRight, LayoutDashboard, Flag, Camera } from "lucide-react";
+import { Shield, Users, Bell, MessageSquare, Settings, LogOut, User, ChevronLeft, ChevronRight, LayoutDashboard, Flag, Camera, History } from "lucide-react";
 import Link from "next/link";
 
-type AdminTab = 'overview'|'users'|'notifications'|'flagged'|'chats'|'settings';
+type AdminTab = 'overview'|'users'|'notifications'|'flagged'|'chats'|'settings'|'records';
 
 interface AdminSidebarProps {
   currentUser: {_id?:string;name:string;email:string} | null;
@@ -30,6 +30,7 @@ const tabs = [
   { id: 'users' as AdminTab, label: 'Users', icon: Users, badgeKey: 'totalUsers' },
   { id: 'notifications' as AdminTab, label: 'Notifications', icon: Bell, badgeKey: 'unreadCount' },
   { id: 'flagged' as AdminTab, label: 'Flagged Reports', icon: Flag, badgeKey: 'flaggedCount' },
+  { id: 'records' as AdminTab, label: 'Evidence Records', icon: History },
   { id: 'chats' as AdminTab, label: 'Team Chat', icon: MessageSquare, badgeKey: 'chatUnreadCount' },
   { id: 'settings' as AdminTab, label: 'Settings', icon: Settings },
 ];

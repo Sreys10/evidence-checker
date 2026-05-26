@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,8 @@ export default function TamperingDetection({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<DetectionResult[]>([]);
   const [currentAnalysis, setCurrentAnalysis] = useState<DetectionResult | null>(null);
+  // Ref to reliably gate autoStart — avoids stale closure on isAnalyzing state
+  const isRunningRef = React.useRef(false);
 
   // Load evidence from storage on mount
   useEffect(() => {
@@ -75,12 +77,19 @@ export default function TamperingDetection({
         const all = await getAllEvidence();
         const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
         if (found && found.imageData) {
+          // Guard: skip video evidence — tampering detection only supports images.
+          // Video evidence stores a JPEG frame thumbnail as imageData; analyzing it
+          // would produce misleading results. Direct the user to Video Detection tab.
+          if (found.type && found.type.startsWith('video/')) {
+            console.warn('TamperingDetection: preselected evidence is a video. Skipping auto-load.');
+            return;
+          }
           try {
             const file = await dataURLtoFile(found.imageData, found.fileName);
             setSelectedFile(file);
 
-            // Auto-start analysis if requested and not already analyzing
-            if (autoStart && !isAnalyzing) {
+            // Auto-start analysis if requested — use ref to avoid stale closure
+            if (autoStart && !isRunningRef.current) {
               if (onAnalysisStarted) onAnalysisStarted();
               startAnalysis(file);
             }
@@ -91,6 +100,7 @@ export default function TamperingDetection({
       }
     };
     loadPreselected();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselectedEvidenceId, autoStart]);
 
   const loadEvidenceFromStorage = async () => {
@@ -125,7 +135,10 @@ export default function TamperingDetection({
   const startAnalysis = async (fileToAnalyze?: File) => {
     const file = fileToAnalyze || selectedFile;
     if (!file) return;
+    // Prevent duplicate concurrent analyses (guards the autoStart stale-closure bug)
+    if (isRunningRef.current) return;
 
+    isRunningRef.current = true;
     setIsAnalyzing(true);
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -151,8 +164,6 @@ export default function TamperingDetection({
           size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
           type: file.type,
         };
-        // Note: saveEvidence in MongoDB-backed version returns a promise
-        // and provides the saved evidence object including its _id
         const savedResult = await saveEvidence(evidenceData);
         const evidenceId = savedResult?.id || savedResult?._id || newAnalysis.id;
 
@@ -169,7 +180,6 @@ export default function TamperingDetection({
         if (!response.ok) {
           const errorData = await response.json();
           console.error('API Error:', errorData);
-          // Show detailed error message
           const errorMessage = errorData.details || errorData.error || 'Analysis failed';
           throw new Error(errorMessage);
         }
@@ -182,11 +192,9 @@ export default function TamperingDetection({
             confidence: data.result.confidence,
             anomalies: data.result.anomalies || [],
             metadata: data.result.metadata || {},
-
-            aiDetection: data.result.aiDetection, // Store AI detection results
+            aiDetection: data.result.aiDetection,
           };
 
-          // Update evidence in storage with analysis results
           await updateEvidenceAnalysis(evidenceId as string, {
             isTampered: data.result.isTampered,
             confidence: data.result.confidence,
@@ -210,7 +218,6 @@ export default function TamperingDetection({
         console.error('Analysis error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
 
-        // Update with error state
         setCurrentAnalysis(null);
         setResults((prev) =>
           prev.map((r) =>
@@ -229,6 +236,7 @@ export default function TamperingDetection({
           )
         );
       } finally {
+        isRunningRef.current = false;
         setIsAnalyzing(false);
         setSelectedFile(null);
       }

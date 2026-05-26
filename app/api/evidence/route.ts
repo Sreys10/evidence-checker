@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJwt } from '@/lib/jwt';
-import { createEvidence, getEvidenceByUser } from '@/lib/models/Evidence';
+import { createEvidence, getEvidenceByUser, getAllEvidenceAdmin } from '@/lib/models/Evidence';
 
 async function authenticate(request: NextRequest) {
   const sessionCookie = request.cookies.get('evicheck_session');
@@ -15,7 +15,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const evidenceList = await getEvidenceByUser(user.id as string);
+    const isAdmin = (user as any).userType === 'admin';
+    const evidenceList = isAdmin 
+      ? await getAllEvidenceAdmin()
+      : await getEvidenceByUser(user.id as string);
+
     return NextResponse.json({ evidence: evidenceList }, { status: 200 });
   } catch (error: any) {
     console.error('API Error:', error);

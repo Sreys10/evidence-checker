@@ -18,6 +18,8 @@ import ChatPanel from "@/components/analyst/chat-panel";
 import AdminSidebar from "@/components/admin/admin-sidebar";
 import { OverviewTab, UsersTab, NotificationsTab, FlaggedTab } from "@/components/admin/admin-tabs";
 import type { AdminUser, AdminNotification, AdminFlaggedReport } from "@/lib/types/admin";
+import EvidenceRecords from "@/components/analyst/evidence-records";
+import EvidenceDetail from "@/components/analyst/evidence-detail";
 
 
 const isUserOnline = (lastLogin: string | Date | undefined): boolean => {
@@ -40,7 +42,8 @@ export default function AdminPage() {
   const [flaggedReports, setFlaggedReports] = useState<AdminFlaggedReport[]>([]);
   const [chatWith, setChatWith] = useState<AdminUser | null>(null);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'overview'|'users'|'notifications'|'flagged'|'chats'|'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview'|'users'|'notifications'|'flagged'|'chats'|'settings'|'records'|'evidence-detail'>('overview');
+  const [viewingEvidenceId, setViewingEvidenceId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -50,9 +53,19 @@ export default function AdminPage() {
     if (tab === 'chats') setChatUnreadCount(0);
   };
 
-  const loadNotifications = () => {
-    const saved = localStorage.getItem('adminNotifications');
-    if (saved) setNotifications(JSON.parse(saved));
+  const loadNotifications = async () => {
+    try {
+      const res = await fetch('/api/admin/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (err) {
+      // Fallback to localStorage if API unavailable (e.g. not yet an admin)
+      const saved = localStorage.getItem('adminNotifications');
+      if (saved) setNotifications(JSON.parse(saved));
+    }
+    // Flagged reports remain in localStorage (local-only admin action)
     const savedFlagged = localStorage.getItem('adminFlaggedReports');
     if (savedFlagged) setFlaggedReports(JSON.parse(savedFlagged));
   };
@@ -69,6 +82,8 @@ export default function AdminPage() {
       generatedBy: notification.reportData.generatedBy || { name: 'Unknown', email: '' },
       flaggedAt: new Date().toISOString(),
       reason: 'Flagged by admin for review',
+      reportData: notification.reportData,
+      fullReport: notification.fullReport,
     };
     const updated = [flagged, ...flaggedReports];
     setFlaggedReports(updated);
@@ -124,10 +139,9 @@ export default function AdminPage() {
     fetchProfile();
     fetchUsers();
     loadNotifications();
-    const handler = (e: StorageEvent) => { if (e.key === 'adminNotifications') loadNotifications(); };
-    window.addEventListener('storage', handler);
-    const interval = setInterval(loadNotifications, 2000);
-    return () => { window.removeEventListener('storage', handler); clearInterval(interval); };
+    // Poll notifications from DB every 10 s
+    const interval = setInterval(loadNotifications, 10000);
+    return () => clearInterval(interval);
   }, [router]);
 
   // Poll chat unread count for admin sidebar badge
@@ -164,22 +178,31 @@ export default function AdminPage() {
     } catch (err) { console.error("Delete user error:", err); }
   };
 
-  const markAsRead = (id: string) => {
-    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
-    setNotifications(updated);
-    localStorage.setItem('adminNotifications', JSON.stringify(updated));
+  const markAsRead = async (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    await fetch('/api/admin/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mark_read', id }),
+    }).catch(console.error);
   };
 
-  const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updated);
-    localStorage.setItem('adminNotifications', JSON.stringify(updated));
+  const markAllAsRead = async () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    await fetch('/api/admin/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mark_all_read' }),
+    }).catch(console.error);
   };
 
-  const archiveNotification = (id: string) => {
-    const updated = notifications.map(n => n.id === id ? { ...n, read: true, archived: true } : n);
-    setNotifications(updated);
-    localStorage.setItem('adminNotifications', JSON.stringify(updated));
+  const archiveNotification = async (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true, archived: true } : n));
+    await fetch('/api/admin/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'archive', id }),
+    }).catch(console.error);
   };
 
   const handleLogout = async () => {
@@ -251,6 +274,8 @@ export default function AdminPage() {
                  activeTab === 'users' ? 'User Management' :
                  activeTab === 'notifications' ? 'Notifications' :
                  activeTab === 'flagged' ? 'Flagged Reports' :
+                 activeTab === 'records' ? 'Evidence Records' :
+                 activeTab === 'evidence-detail' ? 'Evidence Details' :
                  activeTab === 'chats' ? 'Team Chat' : 'Settings'}
               </h1>
               <p className="text-xs text-muted-foreground hidden sm:block">
@@ -258,6 +283,8 @@ export default function AdminPage() {
                  activeTab === 'users' ? `${totalUsers} registered users` :
                  activeTab === 'notifications' ? `${unreadCount} unread notifications` :
                  activeTab === 'flagged' ? `${flaggedReports.length} reports flagged for review` :
+                 activeTab === 'records' ? 'View and search case evidence records' :
+                 activeTab === 'evidence-detail' ? 'Detailed forensic visualization' :
                  activeTab === 'chats' ? 'Chat with your team' : 'Profile and preferences'}
               </p>
             </div>
@@ -307,6 +334,21 @@ export default function AdminPage() {
             )}
             {activeTab === 'flagged' && (
               <FlaggedTab flaggedReports={flaggedReports} onRemove={removeFlaggedReport} />
+            )}
+            {activeTab === 'records' && (
+              <EvidenceRecords
+                onView={(evidenceId) => {
+                  setViewingEvidenceId(evidenceId);
+                  setActiveTab('evidence-detail');
+                }}
+              />
+            )}
+            {activeTab === 'evidence-detail' && viewingEvidenceId && (
+              <EvidenceDetail
+                evidenceId={viewingEvidenceId}
+                onBack={() => setActiveTab('records')}
+                onAction={(action, id) => {}}
+              />
             )}
             {activeTab === 'settings' && (
               <div className="max-w-md mx-auto">

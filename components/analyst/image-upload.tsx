@@ -53,6 +53,7 @@ import {
   AlertCircle,
   Clock,
   Download,
+  Video,
 } from "lucide-react";
 
 interface UploadedFile {
@@ -138,15 +139,15 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
       caseName: newCaseName.trim(),
       createdDate: new Date().toISOString(),
     };
-    await saveCase(newCase);
+    const created = await saveCase(newCase);
     await refreshCases();
-    
-    // Find the newly created case in the updated list to select it
-    // Note: saveCase now works with MongoDB, but the UI might need the ID
-    // Our backend returns the new case including _id.
-    // However, saveCase in lib/evidence-storage.ts doesn't return anything.
-    // I should probably update it to return the saved object.
-    // For now, I'll just refresh and the user can select it or I can try to find it.
+
+    // Auto-select the newly created case
+    if (created) {
+      setSelectedCase(created);
+      setUploadedFiles([]);
+    }
+
     setIsCreatingCase(false);
     setNewCaseNumber("");
     setNewCaseName("");
@@ -192,18 +193,18 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
       if (!files || !selectedCase) return;
 
       Array.from(files).forEach((file) => {
-        if (!file.type.startsWith("image/")) {
-          alert(`${file.name} is not an image file`);
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+
+        if (!isImage && !isVideo) {
+          alert(`${file.name} is not a supported file type (image or video)`);
           return;
         }
 
-        const reader = new FileReader();
-        const fileId =
-          Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const fileId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
         const eName = evidenceNameInput.trim() || file.name.replace(/\.[^/.]+$/, "");
 
-        reader.onload = (e) => {
-          const preview = e.target?.result as string;
+        const saveAndTrackEvidence = (preview: string) => {
           const newFile: UploadedFile = {
             id: fileId,
             file,
@@ -229,7 +230,7 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
             caseName: selectedCase.caseName,
             evidenceName: eName,
           };
-          
+
           saveEvidence(evidenceData).then((saved) => {
             if (saved) {
               setUploadedFiles((prev) =>
@@ -265,7 +266,61 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
           }, 150);
         };
 
-        reader.readAsDataURL(file);
+        if (isVideo) {
+          if (file.size <= 10 * 1024 * 1024) {
+            // Under 10MB: read actual video to base64 for full playback and remote hosting
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const videoBase64 = e.target?.result as string;
+              saveAndTrackEvidence(videoBase64);
+            };
+            reader.readAsDataURL(file);
+          } else {
+            // Fallback for large videos: extract thumbnail frame
+            const videoEl = document.createElement("video");
+            videoEl.preload = "metadata";
+            videoEl.muted = true;
+            videoEl.playsInline = true;
+            videoEl.src = URL.createObjectURL(file);
+
+            videoEl.onloadedmetadata = () => {
+              videoEl.currentTime = 0.5;
+            };
+
+            videoEl.onseeked = () => {
+              try {
+                const canvas = document.createElement("canvas");
+                canvas.width = 320;
+                canvas.height = 180;
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                  const base64Preview = canvas.toDataURL("image/jpeg", 0.8);
+                  saveAndTrackEvidence(base64Preview);
+                } else {
+                  saveAndTrackEvidence("");
+                }
+              } catch (err) {
+                saveAndTrackEvidence("");
+              } finally {
+                URL.revokeObjectURL(videoEl.src);
+              }
+            };
+
+            videoEl.onerror = () => {
+              saveAndTrackEvidence("");
+              URL.revokeObjectURL(videoEl.src);
+            };
+          }
+        } else {
+          // Standard FileReader for image files
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const preview = e.target?.result as string;
+            saveAndTrackEvidence(preview);
+          };
+          reader.readAsDataURL(file);
+        }
       });
 
       setEvidenceNameInput("");
@@ -292,9 +347,134 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
     setIsDragging(false);
   }, []);
 
-  const removeFile = (id: string) => {
+  const removeFile = async (id: string) => {
+    const fileToRemove = uploadedFiles.find((f) => f.id === id);
+    if (fileToRemove?.dbId) {
+      await deleteEvidence(fileToRemove.dbId).catch((err) =>
+        console.error("Failed to delete evidence from DB:", err)
+      );
+    }
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
   };
+
+  const renderEvidenceCard = (ev: StoredEvidence) => (
+    <Card 
+      key={ev.id} 
+      className="overflow-hidden group hover:border-primary/50 transition-all duration-300 hover:shadow-md cursor-pointer relative"
+      onClick={() => setViewingEvidence(ev)}
+    >
+      <div className="aspect-square relative bg-muted">
+        {ev.imageData ? (
+          <>
+            {ev.type?.startsWith('video/') ? (
+              <div className="w-full h-full relative bg-black flex items-center justify-center">
+                {ev.imageData.startsWith('data:video/') || ev.imageData.includes('/video/upload/') ? (
+                  <video src={ev.imageData} className="w-full h-full object-cover pointer-events-none" preload="metadata" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={ev.imageData} alt={ev.fileName} className="w-full h-full object-cover opacity-60" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <Video className="h-8 w-8 text-white drop-shadow" />
+                </div>
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={ev.imageData} alt={ev.fileName} className="w-full h-full object-cover" />
+            )}
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            {ev.type?.startsWith('video/') ? <Video className="h-8 w-8" /> : <ImageIcon className="h-8 w-8" />}
+          </div>
+        )}
+        
+        {/* Status Badge */}
+        {ev.status === 'complete' && (
+          <div className="absolute top-2 right-2 bg-background/90 backdrop-blur-sm rounded-full p-1 shadow-sm z-10">
+            {ev.result === 'authentic' ?
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
+              <AlertCircle className="h-4 w-4 text-rose-500" />}
+          </div>
+        )}
+
+        {/* Overlay Actions */}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
+          <Button 
+            size="icon" 
+            variant="secondary" 
+            className="h-8 w-8 rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewingEvidence(ev);
+            }}
+          >
+            <Eye className="h-4 w-4 text-primary" />
+          </Button>
+          <Button 
+            size="icon" 
+            variant="secondary" 
+            className="h-8 w-8 rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsRenaming(ev.id!);
+              setRenameValue(ev.evidenceName || ev.fileName);
+            }}
+          >
+            <Edit2 className="h-4 w-4" />
+          </Button>
+          <Button 
+            size="icon" 
+            variant="destructive" 
+            className="h-8 w-8 rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteEvidence(ev.id!);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {isRenaming === ev.id ? (
+        <div className="p-2 bg-background border-t" onClick={(e) => e.stopPropagation()}>
+          <Input 
+            value={renameValue} 
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRenameEvidence(ev.id!);
+              if (e.key === 'Escape') setIsRenaming(null);
+            }}
+            className="h-8 text-xs focus-visible:ring-primary"
+            autoFocus
+          />
+          <div className="flex justify-end gap-1 mt-1">
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setIsRenaming(null)}>
+              <X className="h-3 w-3" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={() => handleRenameEvidence(ev.id!)}>
+              <CheckCircle2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-2.5">
+          <p className="text-xs font-semibold truncate" title={ev.evidenceName || ev.fileName}>
+            {ev.evidenceName || ev.fileName}
+          </p>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-[10px] text-muted-foreground font-medium">
+              {new Date(ev.uploadDate).toLocaleDateString()}
+            </span>
+            <Badge variant="outline" className="text-[8px] h-4 px-1 uppercase font-mono">
+              {ev.type.split('/')[1] || 'FILE'}
+            </Badge>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
 
   // ──────── PHASE 1: CASE SELECTION ────────
   if (!selectedCase) {
@@ -494,19 +674,19 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                   <CloudUpload className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-1">
-                  Drag and drop evidence files
+                  Drag & drop evidence files
                 </h3>
                 <p className="text-muted-foreground mb-4 max-w-sm mx-auto text-sm">
-                  JPEG, PNG, TIFF, RAW — max 50MB
+                  JPEG, PNG, TIFF, RAW, MP4, WEBM — max 200MB
                 </p>
-                <div>
+                <div className="flex flex-col items-center">
                   <input
                     type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => handleFileSelect(e.target.files)}
-                    className="hidden"
                     ref={fileInputRef}
+                    className="hidden"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={(e) => handleFileSelect(e.target.files)}
                   />
                   <Button
                     type="button"
@@ -553,11 +733,35 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                   className="group relative bg-card border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div className="aspect-[4/3] bg-muted relative overflow-hidden">
-                    <img
-                      src={file.preview}
-                      alt={file.file.name}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
+                    {file.type?.startsWith("video/") ? (
+                      <div className="w-full h-full relative bg-black flex items-center justify-center">
+                        {file.preview && (file.preview.startsWith("data:video/") || file.preview.includes("/video/upload/")) ? (
+                          <video
+                            src={file.preview}
+                            className="w-full h-full object-cover pointer-events-none"
+                            preload="metadata"
+                            muted
+                            playsInline
+                          />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={file.preview}
+                            alt={file.file.name}
+                            className="w-full h-full object-cover opacity-60"
+                          />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <Video className="h-8 w-8 text-white drop-shadow" />
+                        </div>
+                      </div>
+                    ) : (
+                      <img
+                        src={file.preview}
+                        alt={file.file.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                    )}
 
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <Button
@@ -594,7 +798,7 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                         <Button 
                           size="sm" 
                           className="w-full bg-primary hover:bg-primary/90 text-white gap-1.5 h-8 text-[11px]"
-                          onClick={() => onNavigateToDetect?.(file.dbId)}
+                          onClick={() => onNavigateToDetect?.(file.dbId, file.type)}
                         >
                           <Search className="h-3.5 w-3.5" />
                           Instant Detect
@@ -648,7 +852,7 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                     <Button
                       onClick={() => {
                         const lastSuccessfulFile = [...uploadedFiles].reverse().find(f => f.status === 'success' && f.dbId);
-                        onNavigateToDetect?.(lastSuccessfulFile?.dbId);
+                        onNavigateToDetect?.(lastSuccessfulFile?.dbId, lastSuccessfulFile?.type);
                       }}
                       className="w-full sm:w-auto gap-2 shadow-md"
                     >
@@ -663,120 +867,48 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
       </AnimatePresence>
 
       {/* Existing Evidence Section */}
-      {selectedCase && existingEvidence.length > 0 && (
-        <div className="pt-8 border-t border-border mt-8">
-          <div className="flex items-center gap-2 mb-4">
-            <h3 className="text-lg font-semibold">Existing Evidence in this Case</h3>
-            <Badge variant="outline">{existingEvidence.length}</Badge>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {existingEvidence.map((ev) => (
-              <Card 
-                key={ev.id} 
-                className="overflow-hidden group hover:border-primary/50 transition-all duration-300 hover:shadow-md cursor-pointer relative"
-                onClick={() => setViewingEvidence(ev)}
-              >
-                <div className="aspect-square relative bg-muted">
-                  {ev.imageData ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={ev.imageData} alt={ev.fileName} className="w-full h-full object-cover" />
-                    </>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <ImageIcon className="h-8 w-8" />
-                    </div>
-                  )}
-                  
-                  {/* Status Badge */}
-                  {ev.status === 'complete' && (
-                    <div className="absolute top-2 right-2 bg-background/90 backdrop-blur-sm rounded-full p-1 shadow-sm z-10">
-                      {ev.result === 'authentic' ?
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
-                        <AlertCircle className="h-4 w-4 text-rose-500" />}
-                    </div>
-                  )}
+      {selectedCase && existingEvidence.length > 0 && (() => {
+        const imagesOnly = existingEvidence.filter((ev) => !ev.type?.startsWith("video/"));
+        const videosOnly = existingEvidence.filter((ev) => ev.type?.startsWith("video/"));
+        return (
+          <div className="pt-8 border-t border-border mt-8 space-y-8">
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-xl font-bold tracking-tight">Case Evidence Records</h3>
+              <Badge variant="outline" className="font-semibold">{existingEvidence.length}</Badge>
+            </div>
 
-                  {/* Overlay Actions */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
-                    <Button 
-                      size="icon" 
-                      variant="secondary" 
-                      className="h-8 w-8 rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setViewingEvidence(ev);
-                      }}
-                    >
-                      <Eye className="h-4 w-4 text-primary" />
-                    </Button>
-                    <Button 
-                      size="icon" 
-                      variant="secondary" 
-                      className="h-8 w-8 rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsRenaming(ev.id!);
-                        setRenameValue(ev.evidenceName || ev.fileName);
-                      }}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      size="icon" 
-                      variant="destructive" 
-                      className="h-8 w-8 rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteEvidence(ev.id!);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+            {/* Images Section */}
+            {imagesOnly.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-border/40 pb-2">
+                  <ImageIcon className="h-4.5 w-4.5 text-primary" />
+                  <h4 className="text-sm font-semibold text-foreground/90">
+                    Images ({imagesOnly.length})
+                  </h4>
                 </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {imagesOnly.map((ev) => renderEvidenceCard(ev))}
+                </div>
+              </div>
+            )}
 
-                {isRenaming === ev.id ? (
-                  <div className="p-2 bg-background border-t" onClick={(e) => e.stopPropagation()}>
-                    <Input 
-                      value={renameValue} 
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRenameEvidence(ev.id!);
-                        if (e.key === 'Escape') setIsRenaming(null);
-                      }}
-                      className="h-8 text-xs focus-visible:ring-primary"
-                      autoFocus
-                    />
-                    <div className="flex justify-end gap-1 mt-1">
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setIsRenaming(null)}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={() => handleRenameEvidence(ev.id!)}>
-                        <CheckCircle2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-2.5">
-                    <p className="text-xs font-semibold truncate" title={ev.evidenceName || ev.fileName}>
-                      {ev.evidenceName || ev.fileName}
-                    </p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] text-muted-foreground font-medium">
-                        {new Date(ev.uploadDate).toLocaleDateString()}
-                      </span>
-                      <Badge variant="outline" className="text-[8px] h-4 px-1 uppercase font-mono">
-                        {ev.type.split('/')[1] || 'FILE'}
-                      </Badge>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            ))}
+            {/* Videos Section */}
+            {videosOnly.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-border/40 pb-2">
+                  <Video className="h-4.5 w-4.5 text-primary" />
+                  <h4 className="text-sm font-semibold text-foreground/90">
+                    Videos ({videosOnly.length})
+                  </h4>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {videosOnly.map((ev) => renderEvidenceCard(ev))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Evidence Detail Sheet */}
       <Sheet open={!!viewingEvidence} onOpenChange={(open) => !open && setViewingEvidence(null)}>
@@ -812,16 +944,36 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
 
               <div className="flex-1 overflow-y-auto">
                 <div className="p-6 space-y-8">
-                  {/* Image Preview */}
+                  {/* Image/Video Preview */}
                   <div className="relative group rounded-2xl overflow-hidden bg-black/5 border border-border/50 shadow-inner aspect-[4/3]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={viewingEvidence.imageData} 
-                      alt={viewingEvidence.fileName} 
-                      className="w-full h-full object-contain"
-                    />
+                    {viewingEvidence.type?.startsWith('video/') ? (
+                      <video 
+                        src={viewingEvidence.imageData} 
+                        controls 
+                        className="w-full h-full object-contain bg-black"
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img 
+                        src={viewingEvidence.imageData} 
+                        alt={viewingEvidence.fileName} 
+                        className="w-full h-full object-contain"
+                      />
+                    )}
                     <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex justify-end">
-                      <Button variant="secondary" size="sm" className="gap-2 backdrop-blur-sm bg-background/20 text-white border-white/20 hover:bg-background/40">
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="gap-2 backdrop-blur-sm bg-background/20 text-white border-white/20 hover:bg-background/40"
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = viewingEvidence.imageData;
+                          link.download = viewingEvidence.fileName;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                      >
                         <Download className="h-4 w-4" /> Save Original
                       </Button>
                     </div>
@@ -894,11 +1046,11 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                             This evidence has not been analyzed for tampering yet.
                           </p>
                           <Button 
-                            className="w-full gap-2 py-6 rounded-2xl shadow-lg"
-                            onClick={() => onNavigateToDetect?.(viewingEvidence.id || (viewingEvidence as any)._id)}
-                          >
-                            <Search className="h-4 w-4" /> Start Forensic Analysis
-                          </Button>
+                             className="w-full gap-2 py-6 rounded-2xl shadow-lg"
+                             onClick={() => onNavigateToDetect?.(viewingEvidence.id || (viewingEvidence as any)._id, viewingEvidence.type)}
+                           >
+                             <Search className="h-4 w-4" /> Start Forensic Analysis
+                           </Button>
                         </div>
                       )}
 
@@ -955,7 +1107,7 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                   }}>
                     <Search className="h-4 w-4" /> Match Faces
                   </Button>
-                  <Button className="gap-2 rounded-xl py-6" onClick={() => onNavigateToDetect?.(viewingEvidence.id || (viewingEvidence as any)._id)}>
+                  <Button className="gap-2 rounded-xl py-6" onClick={() => onNavigateToDetect?.(viewingEvidence.id || (viewingEvidence as any)._id, viewingEvidence.type)}>
                     <Search className="h-4 w-4" /> Analysis
                   </Button>
                 </div>

@@ -13,7 +13,7 @@ cloudinary.config({
 export async function uploadImageToCloudinary(base64DataUrl: string): Promise<string> {
   const result = await cloudinary.uploader.upload(base64DataUrl, {
     folder: 'evi-check',
-    resource_type: 'image',
+    resource_type: 'auto',
   });
   return result.secure_url;
 }
