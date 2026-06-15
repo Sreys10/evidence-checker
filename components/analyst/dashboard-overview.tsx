@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
-import { getAllEvidence, StoredEvidence } from "@/lib/evidence-storage";
+import { getAllEvidence, StoredEvidence, getAllCases } from "@/lib/evidence-storage";
 import {
     AreaChart,
     Area,
@@ -30,6 +30,8 @@ import {
     PieChart,
     Pie,
     Cell,
+    BarChart,
+    Bar,
 } from "recharts";
 
 interface DashboardOverviewProps {
@@ -47,6 +49,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
     const [recentEvidence, setRecentEvidence] = useState<StoredEvidence[]>([]);
     const [trendData, setTrendData] = useState<{ display: string; uploads: number }[]>([]);
     const [donutData, setDonutData] = useState<{ name: string; value: number; color: string }[]>([]);
+    const [caseResolutionData, setCaseResolutionData] = useState<{ name: string; value: number; color: string }[]>([]);
 
     useEffect(() => {
         const updateData = async () => {
@@ -85,6 +88,30 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                 { name: 'Tampered', value: tampered, color: '#ef4444' }, 
                 { name: 'Pending', value: pending, color: '#f59e0b' },
             ].filter(d => d.value > 0));
+
+            // Calculate case resolution rates
+            const allCases = await getAllCases();
+            let resolvedCases = 0;
+            let activeCases = 0;
+
+            allCases.forEach(c => {
+                const caseEvidence = allEv.filter(e => e.caseId === c.id || e.caseId === c._id);
+                if (caseEvidence.length === 0) {
+                    activeCases++;
+                } else {
+                    const allComplete = caseEvidence.every(e => e.status === "complete");
+                    if (allComplete) {
+                        resolvedCases++;
+                    } else {
+                        activeCases++;
+                    }
+                }
+            });
+
+            setCaseResolutionData([
+                { name: 'Resolved', value: resolvedCases, color: '#10b981' },
+                { name: 'Active', value: activeCases, color: '#8884d8' },
+            ]);
         };
 
         updateData();
@@ -199,14 +226,14 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
             </div>
 
             {/* Charts Row */}
-            <div className="grid gap-6 md:grid-cols-7 h-[350px]">
+            <div className="grid gap-6 md:grid-cols-7 md:h-[350px] h-auto">
                 {/* 7-Day Trend Chart */}
-                <Card className="col-span-1 md:col-span-4 h-full flex flex-col">
+                <Card className="col-span-1 md:col-span-3 h-full flex flex-col">
                     <CardHeader>
                         <CardTitle>Evidence Upload Trend</CardTitle>
                         <CardDescription>Upload activity over the last 7 days</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-1 min-h-0">
+                    <CardContent className="h-[240px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
@@ -228,12 +255,12 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                 </Card>
 
                 {/* Analysis Breakdown */}
-                <Card className="col-span-1 md:col-span-3 h-full flex flex-col">
+                <Card className="col-span-1 md:col-span-2 h-full flex flex-col">
                     <CardHeader>
                         <CardTitle>Authenticity Breakdown</CardTitle>
-                        <CardDescription>Ratio of authentic vs tampered evidence</CardDescription>
+                        <CardDescription>Ratio of authentic vs tampered</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-1 min-h-0 flex items-center justify-center">
+                    <CardContent className="h-[240px] w-full flex items-center justify-center">
                         {donutData.length === 0 ? (
                             <div className="text-center text-muted-foreground text-sm flex flex-col items-center">
                                 <Activity className="h-8 w-8 mb-2 opacity-20" />
@@ -260,6 +287,41 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                         itemStyle={{ fontWeight: 'bold' }}
                                     />
                                 </PieChart>
+                            </ResponsiveContainer>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Case Status Rates */}
+                <Card className="col-span-1 md:col-span-2 h-full flex flex-col">
+                    <CardHeader>
+                        <CardTitle>Case Status Rates</CardTitle>
+                        <CardDescription>Resolved vs active investigation cases</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[240px] w-full flex items-center justify-center">
+                        {caseResolutionData.length === 0 || (caseResolutionData[0].value === 0 && caseResolutionData[1].value === 0) ? (
+                            <div className="text-center text-muted-foreground text-sm flex flex-col items-center justify-center h-full">
+                                <Briefcase className="h-8 w-8 mb-2 opacity-20" />
+                                No case data available
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={caseResolutionData}
+                                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                                >
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
+                                    <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
+                                    <RechartsTooltip 
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                        {caseResolutionData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
                             </ResponsiveContainer>
                         )}
                     </CardContent>

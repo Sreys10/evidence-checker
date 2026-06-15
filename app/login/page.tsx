@@ -27,11 +27,7 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email,
-          password,
-          userType,
-        }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await response.json();
@@ -47,14 +43,14 @@ export default function LoginPage() {
         localStorage.setItem('user', JSON.stringify(data.user));
       }
 
-      // Redirect based on user type
-      if (userType === "admin") {
+      // Redirect based on role returned from server (not client-selected)
+      const role = data.user?.userType;
+      if (role === "admin") {
         router.push("/admin");
-      } else if (userType === "analyst") {
+      } else if (role === "analyst") {
         router.push("/analyst");
       } else {
-        // Redirect to dashboard or other pages for other user types
-        router.push("/dashboard");
+        router.push("/analyst");
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred during login";
@@ -251,31 +247,29 @@ export default function LoginPage() {
   <form onSubmit={handleLogin} className="space-y-6">
     <div className="space-y-4">
       
+    {/* Role Selector */}
     <motion.div variants={itemVariants}>
-  <label className="block text-sm font-medium text-foreground mb-1">
-    User Type
-  </label>
-  <motion.div
-    className="relative"
-    variants={inputHoverVariants}
-    initial="rest"
-    whileHover="hover"
-  >
-    <select
-      value={userType}
-      onChange={(e) => setUserType(e.target.value)}
-      className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300"
-      required
-    >
-      <option value="" disabled>
-        Select user type
-      </option>
-      <option value="admin">Admin</option>
-      <option value="analyst">Analyst</option>
-    </select>
-  </motion.div>
-</motion.div>
-
+      <label className="block text-sm font-medium text-foreground mb-1">
+        User Type
+      </label>
+      <motion.div
+        className="relative"
+        variants={inputHoverVariants}
+        initial="rest"
+        whileHover="hover"
+      >
+        <select
+          value={userType}
+          onChange={(e) => setUserType(e.target.value)}
+          className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300"
+          required
+        >
+          <option value="" disabled>Select user type</option>
+          <option value="admin">Admin</option>
+          <option value="analyst">Analyst</option>
+        </select>
+      </motion.div>
+    </motion.div>
 
       {/* Email Input */}
       <motion.div variants={itemVariants}>
@@ -371,7 +365,7 @@ export default function LoginPage() {
         <motion.div whileHover={{ x: 2 }}>
           <Link
             href="/auth/forgot-password"
-            className="text-muted-foreground hover:text-primary transition-colors duration-200"
+            className="text-amber-500 hover:text-amber-600 font-medium transition-colors duration-200"
           >
             Forgot password?
           </Link>

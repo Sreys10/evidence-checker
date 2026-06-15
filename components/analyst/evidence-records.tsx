@@ -63,6 +63,7 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterResult, setFilterResult] = useState<string>("all");
+  const [filterDate, setFilterDate] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [collapsedCases, setCollapsedCases] = useState<Set<string>>(new Set());
@@ -74,35 +75,39 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
   }, []);
 
   const loadRecords = async () => {
-    const storedEvidence = await getAllEvidence();
+    try {
+      const storedEvidence = await getAllEvidence();
 
-    const evidenceRecords: EvidenceRecord[] = storedEvidence.map((evidence) => {
-      return {
-        id: evidence.id || (evidence as any)._id,
-        fileName: evidence.fileName,
-        evidenceName: evidence.evidenceName,
-        uploadDate: new Date(evidence.uploadDate).toLocaleString(),
-        analyzedDate: evidence.analyzedDate ? new Date(evidence.analyzedDate).toLocaleString() : "",
-        status: evidence.status,
-        result: evidence.result ?? null,
-        confidence: evidence.confidence ?? null,
-        size: evidence.size,
-        type: evidence.type,
-        blockchainHash: evidence.blockchainHash || null,
-        reportGenerated: !!evidence.reportGenerated,
-        caseId: evidence.caseId,
-        caseNumber: evidence.caseNumber,
-        caseName: evidence.caseName,
-      };
-    });
+      const evidenceRecords: EvidenceRecord[] = storedEvidence.map((evidence) => {
+        return {
+          id: evidence.id || (evidence as any)._id,
+          fileName: evidence.fileName,
+          evidenceName: evidence.evidenceName,
+          uploadDate: evidence.uploadDate,
+          analyzedDate: evidence.analyzedDate || "",
+          status: evidence.status,
+          result: evidence.result ?? null,
+          confidence: evidence.confidence ?? null,
+          size: evidence.size,
+          type: evidence.type,
+          blockchainHash: evidence.blockchainHash || null,
+          reportGenerated: !!evidence.reportGenerated,
+          caseId: evidence.caseId,
+          caseNumber: evidence.caseNumber,
+          caseName: evidence.caseName,
+        };
+      });
 
-    evidenceRecords.sort((a, b) => {
-      const dateA = new Date(a.uploadDate).getTime();
-      const dateB = new Date(b.uploadDate).getTime();
-      return dateB - dateA;
-    });
+      evidenceRecords.sort((a, b) => {
+        const dateA = new Date(a.uploadDate).getTime();
+        const dateB = new Date(b.uploadDate).getTime();
+        return dateB - dateA;
+      });
 
-    setRecords(evidenceRecords);
+      setRecords(evidenceRecords);
+    } catch (error) {
+      console.error("Error loading evidence records:", error);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -155,7 +160,24 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
       (record.caseNumber || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "all" || record.status === filterStatus;
     const matchesResult = filterResult === "all" || record.result === filterResult;
-    return matchesSearch && matchesStatus && matchesResult;
+    
+    let matchesDate = true;
+    if (filterDate !== "all") {
+      const recordDate = new Date(record.uploadDate);
+      const now = new Date();
+      if (filterDate === "24h") {
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        matchesDate = recordDate >= oneDayAgo;
+      } else if (filterDate === "7d") {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        matchesDate = recordDate >= sevenDaysAgo;
+      } else if (filterDate === "30d") {
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        matchesDate = recordDate >= thirtyDaysAgo;
+      }
+    }
+    
+    return matchesSearch && matchesStatus && matchesResult && matchesDate;
   });
 
   // Group records by case
@@ -260,7 +282,7 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
                   <Calendar className="h-4 w-4" />
                   <div>
                     <p className="text-xs">Uploaded</p>
-                    <p className="text-foreground">{record.uploadDate}</p>
+                    <p className="text-foreground">{new Date(record.uploadDate).toLocaleString()}</p>
                   </div>
                 </div>
                 {record.analyzedDate && (
@@ -268,7 +290,7 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
                     <Clock className="h-4 w-4" />
                     <div>
                       <p className="text-xs">Analyzed</p>
-                      <p className="text-foreground">{record.analyzedDate}</p>
+                      <p className="text-foreground">{new Date(record.analyzedDate).toLocaleString()}</p>
                     </div>
                   </div>
                 )}
@@ -378,6 +400,16 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
               <option value="all">All Results</option>
               <option value="authentic">Authentic</option>
               <option value="tampered">Tampered</option>
+            </select>
+            <select
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="px-4 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">All Time</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
             </select>
           </div>
         </CardContent>

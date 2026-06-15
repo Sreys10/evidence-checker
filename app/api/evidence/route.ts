@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyJwt } from '@/lib/jwt';
 import { createEvidence, getEvidenceByUser, getAllEvidenceAdmin } from '@/lib/models/Evidence';
 
+// Limit the max JSON body to 14 MB (accommodates a 10 MB image base64-encoded at ~133% size)
+export const config = {
+  api: { bodyParser: { sizeLimit: '14mb' } },
+};
+
 async function authenticate(request: NextRequest) {
   const sessionCookie = request.cookies.get('evicheck_session');
   if (!sessionCookie || !sessionCookie.value) return null;
@@ -34,6 +39,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // ── Payload size guard ───────────────────────────────────────────────────
+    // Reject requests whose Content-Length exceeds 14 MB before parsing the body.
+    const contentLength = Number(request.headers.get('content-length') ?? 0);
+    const MAX_BYTES = 14 * 1024 * 1024; // 14 MB
+    if (contentLength > MAX_BYTES) {
+      return NextResponse.json(
+        { error: 'Payload too large. Maximum allowed size is 14 MB (10 MB image + encoding overhead).' },
+        { status: 413 }
+      );
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const body = await request.json();
     if (!body.fileName || !body.imageData) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -52,3 +69,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

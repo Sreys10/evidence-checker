@@ -286,16 +286,14 @@ export default function SignupPage() {
                   className="w-full px-4 py-3 bg-white text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-300"
                   required
                 >
-                  <option value="" disabled>
-                    Select user type
-                  </option>
+                  <option value="" disabled>Select user type</option>
                   <option value="admin">Admin</option>
                   <option value="analyst">Analyst</option>
                 </select>
               </motion.div>
             </motion.div>
 
-            <div className="grid grid-cols-2 gap-4">
+<div className="grid grid-cols-2 gap-4">
               <motion.div variants={itemVariants}>
                 <label className="block text-sm font-medium text-black mb-1">
                   Password

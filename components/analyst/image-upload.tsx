@@ -87,6 +87,8 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
   const [viewingEvidence, setViewingEvidence] = useState<StoredEvidence | null>(null);
   const [isRenaming, setIsRenaming] = useState<string | null>(null); // evidence ID being renamed
   const [renameValue, setRenameValue] = useState("");
+  // analysisStatus tracks the auto-analysis pipeline state per uploaded file id
+  const [analysisStatus, setAnalysisStatus] = useState<Record<string, 'idle' | 'analyzing' | 'analyzed' | 'failed'>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -123,6 +125,62 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
     const allCases = await getAllCases();
     setCases(allCases);
   };
+
+  // ── Auto-analysis pipeline ────────────────────────────────────────────────
+  // Called automatically once an evidence file finishes uploading.
+  // Sends the Cloudinary image URL to /api/detect-tampering and updates the
+  // evidence record's status in the DB. Other forensic checks (face search,
+  // metadata, weapon) remain on-demand from the detection screen.
+  const triggerAutoAnalysis = async (fileId: string, dbId: string, imageUrl: string) => {
+    // Skip auto-analysis for video files (ELA/PRNU are image-only)
+    const uploadedFile = uploadedFiles.find(f => f.id === fileId);
+    if (uploadedFile?.type?.startsWith('video/')) return;
+
+    setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzing' }));
+
+    try {
+      // Mark evidence as analyzing in the DB
+      await fetch(`/api/evidence/${dbId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'analyzing' }),
+      });
+
+      // Call detect-tampering with the stored Cloudinary URL
+      const res = await fetch('/api/detect-tampering', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Persist quick analysis result back to the evidence record
+        await fetch(`/api/evidence/${dbId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'complete',
+            result: (data.riskLevel === 'LOW' || data.riskLevel === 'MINIMAL') ? 'authentic' : 'tampered',
+            confidence: data.elaScore !== undefined ? Math.round((1 - data.elaScore / 24) * 100) : null,
+            analyzedDate: new Date().toISOString(),
+          }),
+        });
+        setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzed' }));
+      } else {
+        // Analysis failed — revert status to pending so the analyst can retry manually
+        await fetch(`/api/evidence/${dbId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'pending' }),
+        });
+        setAnalysisStatus(prev => ({ ...prev, [fileId]: 'failed' }));
+      }
+    } catch {
+      setAnalysisStatus(prev => ({ ...prev, [fileId]: 'failed' }));
+    }
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes";
@@ -201,6 +259,21 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
           return;
         }
 
+        // ── File size guard ──────────────────────────────────────────────────
+        // Images: max 10 MB (base64 inflates ~33%, keeping API payloads sane)
+        // Videos: max 200 MB (handled separately below with thumbnail fallback)
+        const MAX_IMAGE_BYTES = 10 * 1024 * 1024;  // 10 MB
+        const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+        if (isImage && file.size > MAX_IMAGE_BYTES) {
+          alert(`"${file.name}" is too large (${formatFileSize(file.size)}). Image files must be under 10 MB.`);
+          return;
+        }
+        if (isVideo && file.size > MAX_VIDEO_BYTES) {
+          alert(`"${file.name}" is too large (${formatFileSize(file.size)}). Video files must be under 200 MB.`);
+          return;
+        }
+        // ────────────────────────────────────────────────────────────────────
+
         const fileId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
         const eName = evidenceNameInput.trim() || file.name.replace(/\.[^/.]+$/, "");
 
@@ -233,11 +306,19 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
 
           saveEvidence(evidenceData).then((saved) => {
             if (saved) {
+              const savedId = saved.id || saved._id;
               setUploadedFiles((prev) =>
                 prev.map((f) =>
-                  f.id === fileId ? { ...f, dbId: saved.id || saved._id } : f
+                  f.id === fileId ? { ...f, dbId: savedId } : f
                 )
               );
+
+              // Kick off auto-analysis once the DB record exists and upload completes
+              // We start the analysis pipeline after the progress bar finishes (400ms delay below)
+              const imageUrl = saved.imageData; // Cloudinary URL returned by saveEvidence
+              setTimeout(() => {
+                triggerAutoAnalysis(fileId, savedId!, imageUrl);
+              }, 600); // small delay so the user sees the 'UPLOADED' state first
             }
           });
 
@@ -774,12 +855,11 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                       </Button>
                     </div>
 
+                    {/* ── Status overlay (3 stages) ──────────────────────── */}
                     {file.status === "uploading" && (
                       <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center p-4">
                         <Loader2 className="h-8 w-8 text-white animate-spin mb-2" />
-                        <span className="text-white text-xs font-medium mb-2">
-                          Uploading...
-                        </span>
+                        <span className="text-white text-xs font-medium mb-2">Uploading...</span>
                         <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
                           <motion.div
                             className="h-full bg-primary"
@@ -789,27 +869,45 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
                         </div>
                       </div>
                     )}
-                    {file.status === "success" && (
+
+                    {/* Analyzing badge */}
+                    {file.status === "success" && analysisStatus[file.id] === 'analyzing' && (
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="h-7 w-7 text-amber-400 animate-spin" />
+                        <span className="text-amber-300 text-[11px] font-semibold tracking-wide uppercase">Analyzing…</span>
+                      </div>
+                    )}
+
+                    {/* Corner badge: idle / analyzed / failed */}
+                    {file.status === "success" && analysisStatus[file.id] !== 'analyzing' && (
+                      <div className="absolute top-2 right-2">
+                        {analysisStatus[file.id] === 'analyzed' ? (
+                          <div className="bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center shadow-sm gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Analyzed
+                          </div>
+                        ) : analysisStatus[file.id] === 'failed' ? (
+                          <div className="bg-rose-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center shadow-sm gap-1">
+                            <AlertCircle className="h-3 w-3" /> Analysis Failed
+                          </div>
+                        ) : (
+                          <div className="bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center shadow-sm">
+                            <CheckCircle2 className="h-3 w-3 mr-1" /> Uploaded
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Hover overlay with Instant Detect button */}
+                    {file.status === "success" && analysisStatus[file.id] !== 'analyzing' && (
                       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4">
-                        <div className="bg-emerald-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full mb-3 shadow-lg flex items-center">
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                          UPLOADED
-                        </div>
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           className="w-full bg-primary hover:bg-primary/90 text-white gap-1.5 h-8 text-[11px]"
                           onClick={() => onNavigateToDetect?.(file.dbId, file.type)}
                         >
                           <Search className="h-3.5 w-3.5" />
-                          Instant Detect
+                          {analysisStatus[file.id] === 'analyzed' ? 'View Full Analysis' : 'Run Detection'}
                         </Button>
-                      </div>
-                    )}
-                    {file.status === "success" && (
-                      <div className="absolute top-2 right-2 group-hover:hidden">
-                        <div className="bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center shadow-sm">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                        </div>
                       </div>
                     )}
                   </div>

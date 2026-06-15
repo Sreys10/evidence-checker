@@ -22,8 +22,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Block self-registration as admin — all public signups are analyst.
+    // Admin accounts must be elevated by an existing admin after account creation.
+    if (userType === 'admin') {
+      return NextResponse.json(
+        { error: 'Admin accounts cannot be created via public signup.' },
+        { status: 403 }
+      );
+    }
+
     // Validate user type
-    const validUserTypes = ['admin', 'analyst', 'verifier', 'guest'];
+    const validUserTypes = ['analyst', 'verifier', 'guest'];
     if (!validUserTypes.includes(userType)) {
       return NextResponse.json(
         { error: 'Invalid user type' },

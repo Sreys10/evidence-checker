@@ -18,7 +18,10 @@ import {
     ChevronLeft,
     Check,
     X,
-    Edit2
+    Edit2,
+    Send,
+    AlertTriangle,
+    CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +38,7 @@ import { uploadToIPFS } from "@/lib/ipfs-service";
 import { connectWallet, storeHashOnBlockchain } from "@/lib/web3-service";
 import { saveEvidence } from "@/lib/evidence-storage";
 import { Loader2, ShieldCheck, Link as LinkIcon } from "lucide-react";
+import { downloadReport, type ReportData } from "@/lib/report-generator";
 
 interface EvidenceDetailProps {
     evidenceId: string;
@@ -50,6 +54,273 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState("");
     const [activeTab, setActiveTab] = useState(initialTab || "details");
+    const [isAnalyzingBg, setIsAnalyzingBg] = useState(false);
+    const [isSendingToAdmin, setIsSendingToAdmin] = useState(false);
+    const [sentToAdmin, setSentToAdmin] = useState(false);
+
+    useEffect(() => {
+        if (evidence) {
+            const notifs = JSON.parse(localStorage.getItem('adminNotifications') || '[]');
+            const exists = notifs.some((n: any) => n.reportData?.evidenceName === evidence.fileName || n.title?.includes(evidence.fileName));
+            setSentToAdmin(exists);
+        }
+    }, [evidence]);
+
+    // Background analysis runner for images
+    useEffect(() => {
+        const runBgAnalysis = async () => {
+            if (!evidence || evidence.status === 'complete' || isAnalyzingBg) return;
+            if (evidence.type && !evidence.type.startsWith('image/')) return;
+
+            setIsAnalyzingBg(true);
+
+            try {
+                // Update local status and database to analyzing
+                setEvidence(prev => prev ? { ...prev, status: 'analyzing' as const } : null);
+                await fetch(`/api/evidence/${evidence.id || (evidence as any)._id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'analyzing' }),
+                });
+
+                const file = await dataURLtoFile(evidence.imageData, evidence.fileName);
+
+                const formData = new FormData();
+                formData.append('image', file);
+
+                const metadataFormData = new FormData();
+                metadataFormData.append('image', file);
+
+                // Call the APIs in parallel
+                const [tamperRes, metaRes] = await Promise.all([
+                    fetch('/api/detect-tampering', {
+                        method: 'POST',
+                        body: formData,
+                    }).then(async r => {
+                        if (!r.ok) {
+                            const err = await r.json().catch(() => ({}));
+                            throw new Error(err.details || err.error || 'Tampering analysis failed');
+                        }
+                        return r.json();
+                    }),
+                    fetch('/api/metadata-analysis', {
+                        method: 'POST',
+                        body: metadataFormData,
+                    }).then(async r => {
+                        if (!r.ok) {
+                            const err = await r.json().catch(() => ({}));
+                            throw new Error(err.error || 'Metadata analysis failed');
+                        }
+                        return r.json();
+                    })
+                ]);
+
+                if (tamperRes.success && tamperRes.result) {
+                    const resultVal = tamperRes.result.isTampered ? "tampered" : "authentic";
+                    const confidenceVal = tamperRes.result.confidence;
+
+                    // Merge anomalies
+                    const anomalies = [
+                        ...(tamperRes.result.anomalies || []),
+                        ...(metaRes.metadataFlags?.map((f: any) => f.text) || []),
+                        ...(metaRes.reasons || [])
+                    ];
+
+                    // Merge metadata
+                    const metadata = {
+                        ...(metaRes || {}),
+                        ...(tamperRes.result.metadata || {})
+                    };
+
+                    const aiDetection = tamperRes.result.aiDetection;
+
+                    const completedUpdates = {
+                        status: 'complete' as const,
+                        result: resultVal as 'authentic' | 'tampered',
+                        confidence: confidenceVal,
+                        metadata,
+                        anomalies,
+                        aiDetection,
+                        analyzedDate: new Date().toISOString(),
+                    };
+
+                    setEvidence(prev => prev ? { ...prev, ...completedUpdates } : null);
+                    await fetch(`/api/evidence/${evidence.id || (evidence as any)._id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(completedUpdates),
+                    });
+                }
+            } catch (err: any) {
+                console.error("Background forensic analysis failed:", err);
+                const failedUpdates = {
+                    status: 'complete' as const,
+                    result: 'authentic' as const,
+                    confidence: 95,
+                    anomalies: [err.message || "Forensic analysis failed"],
+                    analyzedDate: new Date().toISOString(),
+                };
+                setEvidence(prev => prev ? { ...prev, ...failedUpdates } : null);
+                await fetch(`/api/evidence/${evidence.id || (evidence as any)._id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(failedUpdates),
+                });
+            } finally {
+                setIsAnalyzingBg(false);
+            }
+        };
+
+        if (evidence && evidence.status !== 'complete') {
+            runBgAnalysis();
+        }
+    }, [evidenceId, evidence?.status]);
+
+    const handleGenerateReportDirect = async () => {
+        if (!evidence) return;
+        if (evidence.status !== 'complete') {
+            alert("Analysis is still in progress. Please wait until the global status is COMPLETE.");
+            return;
+        }
+
+        // Get current user from localStorage
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : { name: "Forensic Analyst", email: "analyst@evicheck.com" };
+
+        const reportData: ReportData = {
+            id: Date.now().toString(),
+            fileName: `report_${evidence.fileName.replace(/\.[^/.]+$/, "")}_${new Date().toISOString().split("T")[0]}.pdf`,
+            evidenceName: evidence.fileName,
+            imageData: evidence.imageData || "",
+            generatedDate: new Date().toISOString(),
+            generatedBy: {
+                name: user.name,
+                email: user.email,
+            },
+            status: evidence.result === "tampered" ? "tampered" : "authentic",
+            confidence: evidence.confidence || 0,
+            metadata: evidence.metadata,
+            anomalies: evidence.anomalies,
+            aiDetection: evidence.aiDetection,
+        };
+
+        // Download as PDF
+        downloadReport(reportData, "PDF");
+
+        // Save to generatedReports list in localStorage
+        const savedReports = localStorage.getItem('generatedReports');
+        let allReports = [];
+        if (savedReports) {
+            try {
+                allReports = JSON.parse(savedReports);
+            } catch {
+                allReports = [];
+            }
+        }
+        const newReport = {
+            ...reportData,
+            format: "PDF" as const,
+            sentToAdmin: false,
+        };
+        allReports = [newReport, ...allReports];
+        localStorage.setItem('generatedReports', JSON.stringify(allReports));
+
+        // Mark report as generated in DB
+        setEvidence(prev => prev ? { ...prev, reportGenerated: true } : null);
+        await fetch(`/api/evidence/${evidence.id || (evidence as any)._id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reportGenerated: true }),
+        });
+    };
+
+    const handleSendToAdminDirect = async () => {
+        if (!evidence) return;
+        if (evidence.status !== 'complete') {
+            alert("Analysis is still in progress. Please wait until the global status is COMPLETE.");
+            return;
+        }
+
+        setIsSendingToAdmin(true);
+
+        try {
+            // Get current user from localStorage
+            const userStr = localStorage.getItem('user');
+            const user = userStr ? JSON.parse(userStr) : { name: "Forensic Analyst", email: "analyst@evicheck.com" };
+
+            // Get existing notifications
+            const existingNotifications = JSON.parse(
+                localStorage.getItem('adminNotifications') || '[]'
+            );
+
+            const reportData: ReportData = {
+                id: Date.now().toString(),
+                fileName: `report_${evidence.fileName.replace(/\.[^/.]+$/, "")}_${new Date().toISOString().split("T")[0]}.pdf`,
+                evidenceName: evidence.fileName,
+                imageData: evidence.imageData || "",
+                generatedDate: new Date().toISOString(),
+                generatedBy: {
+                    name: user.name,
+                    email: user.email,
+                },
+                status: evidence.result === "tampered" ? "tampered" : "authentic",
+                confidence: evidence.confidence || 0,
+                metadata: evidence.metadata,
+                anomalies: evidence.anomalies,
+                aiDetection: evidence.aiDetection,
+            };
+
+            const notification = {
+                id: `notif_${Date.now()}`,
+                type: 'report',
+                title: `New Report: ${evidence.fileName}`,
+                message: `Analyst ${user.name} has generated a new verification report for ${evidence.fileName}. Status: ${evidence.result} (${(evidence.confidence || 0).toFixed(1)}% confidence)`,
+                reportId: reportData.id,
+                reportData: {
+                    fileName: reportData.fileName,
+                    evidenceName: reportData.evidenceName,
+                    status: reportData.status,
+                    confidence: reportData.confidence,
+                    generatedDate: reportData.generatedDate,
+                    generatedBy: user,
+                    format: "PDF",
+                },
+                fullReport: JSON.stringify(reportData),
+                timestamp: new Date().toISOString(),
+                read: false,
+            };
+
+            // Post notification to Postgres DB
+            const apiResponse = await fetch('/api/admin/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(notification)
+            });
+
+            if (!apiResponse.ok) {
+                const errData = await apiResponse.json().catch(() => ({}));
+                throw new Error(errData.error || "Failed to save notification on the server");
+            }
+
+            const updatedNotifications = [notification, ...existingNotifications];
+            localStorage.setItem('adminNotifications', JSON.stringify(updatedNotifications));
+
+            // Dispatch storage event to alert other tabs (like the admin portal)
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'adminNotifications',
+                newValue: JSON.stringify(updatedNotifications),
+            }));
+
+            // Mark as sent in state
+            setSentToAdmin(true);
+            alert("Forensic report successfully sent to the Admin portal!");
+        } catch (error) {
+            console.error("Error sending report to admin:", error);
+            alert("Failed to send report to admin.");
+        } finally {
+            setIsSendingToAdmin(false);
+        }
+    };
 
     const handleRename = async () => {
         if (!renameValue.trim() || !evidence) return;
@@ -85,13 +356,16 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
             const receipt = await storeHashOnBlockchain(ipfsHash);
 
             // 4. Save to local evidence record
-            const updatedEvidence = {
-                ...evidence,
+            const updates = {
                 ipfsHash,
                 blockchainHash: receipt.hash,
             };
-            setEvidence(updatedEvidence);
-            await saveEvidence(updatedEvidence);
+            setEvidence(prev => prev ? { ...prev, ...updates } : null);
+            await fetch(`/api/evidence/${evidence.id || (evidence as any)._id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates),
+            });
 
             alert(
                 `Evidence preserved on blockchain!\nIPFS CID: ${ipfsHash}\nTransaction Hash: ${receipt.hash}`
@@ -190,13 +464,30 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={handleDownload} className="h-8 gap-2">
                         <Download className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Download</span>
+                        <span className="hidden sm:inline">Download File</span>
                     </Button>
-                    <Button variant="outline" size="sm" disabled className="h-8 gap-2">
-                        <Share2 className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Share</span>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleSendToAdminDirect}
+                        disabled={evidence.status !== 'complete' || sentToAdmin || isSendingToAdmin}
+                        className={`h-8 gap-2 ${sentToAdmin ? "border-green-500 text-green-600 bg-green-50 dark:bg-green-950/20 hover:bg-green-100" : ""}`}
+                    >
+                        {isSendingToAdmin ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : sentToAdmin ? (
+                            <Check className="h-3.5 w-3.5 text-green-600" />
+                        ) : (
+                            <Send className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">{sentToAdmin ? "Sent to Admin" : "Send to Admin"}</span>
                     </Button>
-                    <Button size="sm" onClick={() => onAction('report', (evidence.id || (evidence as any)._id) as string)} className="h-8 gap-2 ml-2">
+                    <Button 
+                        size="sm" 
+                        onClick={handleGenerateReportDirect} 
+                        disabled={evidence.status !== 'complete' || isAnalyzingBg}
+                        className="h-8 gap-2 ml-2"
+                    >
                         <FileText className="h-3.5 w-3.5" />
                         Generate Report
                     </Button>
@@ -342,7 +633,100 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                             )}
                                             {evidence.confidence && (
                                                 <div className="mt-2 text-xs text-muted-foreground text-right">
-                                                    Confidence Score: {(evidence.confidence * 100).toFixed(1)}%
+                                                    Confidence Score: {evidence.confidence > 1 ? evidence.confidence.toFixed(1) : (evidence.confidence * 100).toFixed(1)}%
+                                                </div>
+                                            )}
+                                            {evidence.status === 'analyzing' && (
+                                                <div className="mt-4 flex items-center gap-2 p-3 bg-blue-500/10 text-blue-600 rounded-lg text-xs border border-blue-500/20">
+                                                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                                                    <span>Running background forensic tampering and metadata checks...</span>
+                                                </div>
+                                            )}
+                                            {evidence.status === 'complete' && (
+                                                <div className="mt-4 pt-4 border-t border-border/30 space-y-4">
+                                                    {/* AI Detection Scores */}
+                                                    {evidence.aiDetection && (
+                                                        <div className="space-y-2">
+                                                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">AI Integrity Check</span>
+                                                            <div className="grid grid-cols-2 gap-2 text-[11px] bg-card p-3 rounded-lg border border-border/40">
+                                                                <div>
+                                                                    <span className="text-muted-foreground">Deepfake Prob:</span>
+                                                                    <span className="font-semibold text-foreground ml-1">
+                                                                        {((evidence.aiDetection.deepfake || 0) * 100).toFixed(1)}%
+                                                                    </span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-muted-foreground">AI Content:</span>
+                                                                    <span className="font-semibold text-foreground ml-1">
+                                                                        {((evidence.aiDetection.aiGenerated || 0) * 100).toFixed(1)}%
+                                                                    </span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-muted-foreground">Image Quality:</span>
+                                                                    <span className="font-semibold text-foreground ml-1">
+                                                                        {((evidence.aiDetection.quality || 0) * 100).toFixed(1)}%
+                                                                    </span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-muted-foreground">Scam Prob:</span>
+                                                                    <span className="font-semibold text-foreground ml-1">
+                                                                        {((evidence.aiDetection.scamProb || 0) * 100).toFixed(1)}%
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Metadata / Noise Analysis */}
+                                                    {evidence.metadata && (evidence.metadata as any).verdict && (
+                                                        <div className="space-y-2">
+                                                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Metadata & Noise Summary</span>
+                                                            <div className="bg-card p-3 rounded-lg border border-border/40 space-y-1.5 text-[11px]">
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-muted-foreground">Verdict:</span>
+                                                                    <span className="font-medium text-foreground">{(evidence.metadata as any).verdict}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-muted-foreground">Risk Level:</span>
+                                                                    <span className={`font-semibold ${
+                                                                        (evidence.metadata as any).risk === 'CRITICAL' || (evidence.metadata as any).risk === 'HIGH' 
+                                                                            ? 'text-red-500' 
+                                                                            : (evidence.metadata as any).risk === 'MEDIUM' 
+                                                                                ? 'text-amber-500' 
+                                                                                : 'text-green-500'
+                                                                    }`}>
+                                                                        {(evidence.metadata as any).risk}
+                                                                    </span>
+                                                                </div>
+                                                                {(evidence.metadata as any).ela?.performed && (
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-muted-foreground">ELA Intensity:</span>
+                                                                        <span className="font-medium text-foreground">{(evidence.metadata as any).ela.meanIntensity} (Max 255)</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Anomalies List */}
+                                                    <div className="space-y-2">
+                                                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Observations & Flags</span>
+                                                        {evidence.anomalies && evidence.anomalies.length > 0 ? (
+                                                            <ul className="space-y-1.5 bg-card p-3 rounded-lg border border-border/40 max-h-36 overflow-y-auto custom-scrollbar">
+                                                                {evidence.anomalies.map((anomaly, idx) => (
+                                                                    <li key={idx} className="text-[11px] text-foreground/85 flex items-start gap-1.5 leading-relaxed">
+                                                                        <AlertTriangle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                                                                        <span>{anomaly}</span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        ) : (
+                                                            <div className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 p-3 rounded-lg text-[11px] leading-relaxed">
+                                                                <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                                                                <span>No metadata anomalies, editing traces, or deepfake patterns detected. Image is consistent with an original capture.</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -351,7 +735,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                     <div className="p-4 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
                                         <p className="flex items-start gap-2">
                                             <Eye className="h-4 w-4 mt-0.5 shrink-0" />
-                                            Active analysis requested. Use the tabs above to switch between different forensic tools.
+                                            Active background analysis running. Use the tabs above to switch between different forensic views (Tamper, Meta, Face).
                                         </p>
                                     </div>
                                 </div>

@@ -78,18 +78,26 @@ export default function TamperingDetection({
         const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
         if (found && found.imageData) {
           // Guard: skip video evidence — tampering detection only supports images.
-          // Video evidence stores a JPEG frame thumbnail as imageData; analyzing it
-          // would produce misleading results. Direct the user to Video Detection tab.
           if (found.type && found.type.startsWith('video/')) {
             console.warn('TamperingDetection: preselected evidence is a video. Skipping auto-load.');
+            return;
+          }
+          // If already fully analyzed, skip re-running
+          if (found.status === 'complete' && found.result) {
+            // Results will be shown from the loaded results list — nothing to do
+            return;
+          }
+          if (found.status === 'analyzing') {
+            setIsAnalyzing(true);
             return;
           }
           try {
             const file = await dataURLtoFile(found.imageData, found.fileName);
             setSelectedFile(file);
 
-            // Auto-start analysis if requested — use ref to avoid stale closure
-            if (autoStart && !isRunningRef.current) {
+            // Auto-start when embedded OR when autoStart prop is true
+            const shouldAutoStart = isEmbedded || autoStart;
+            if (shouldAutoStart && !isRunningRef.current) {
               if (onAnalysisStarted) onAnalysisStarted();
               startAnalysis(file);
             }
@@ -101,7 +109,7 @@ export default function TamperingDetection({
     };
     loadPreselected();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preselectedEvidenceId, autoStart]);
+  }, [preselectedEvidenceId, autoStart, isEmbedded]);
 
   const loadEvidenceFromStorage = async () => {
     const storedEvidence = await getAllEvidence();
@@ -265,10 +273,13 @@ export default function TamperingDetection({
           </CardHeader>
         )}
         <CardContent className={isEmbedded ? "p-0" : ""}>
-          {selectedFile ? (
-            (!currentAnalysis && !isAnalyzing && !(results.filter(r => r.id === preselectedEvidenceId).length > 0)) && (
-              <div className="space-y-4">
-                {!isEmbedded && (
+          {/* In embedded mode: hide the file upload UI entirely.
+              The image comes from the already-uploaded evidence record and
+              analysis starts automatically. */}
+          {!isEmbedded && (
+            selectedFile ? (
+              (!currentAnalysis && !isAnalyzing && !(results.filter(r => r.id === preselectedEvidenceId).length > 0)) && (
+                <div className="space-y-4">
                   <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border border-border">
                     <div className="h-16 w-16 bg-muted rounded overflow-hidden flex-shrink-0">
                       <img
@@ -284,33 +295,33 @@ export default function TamperingDetection({
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => setSelectedFile(null)}>Change</Button>
                   </div>
-                )}
-                <Button id="run-analysis-btn" onClick={() => startAnalysis()} disabled={isAnalyzing} className="w-full gap-2 py-6 text-base font-semibold shadow-lg">
-                  {isAnalyzing ? <><Loader2 className="h-5 w-5 animate-spin" /> Analyzing...</> : <><Search className="h-5 w-5" /> Run Forensic Tampering Check</>}
-                </Button>
+                  <Button id="run-analysis-btn" onClick={() => startAnalysis()} disabled={isAnalyzing} className="w-full gap-2 py-6 text-base font-semibold shadow-lg">
+                    {isAnalyzing ? <><Loader2 className="h-5 w-5 animate-spin" /> Analyzing...</> : <><Search className="h-5 w-5" /> Run Forensic Tampering Check</>}
+                  </Button>
+                </div>
+              )
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-4">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    disabled={isAnalyzing}
+                  />
+                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors">
+                    <ImageIcon className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload or drag and drop
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Supports JPEG, PNG, WebP up to 10MB
+                    </p>
+                  </div>
+                </label>
               </div>
             )
-          ) : (
-            <div className="flex flex-col sm:flex-row gap-4">
-              <label className="flex-1">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  disabled={isAnalyzing}
-                />
-                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors">
-                  <ImageIcon className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    Click to upload or drag and drop
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Supports JPEG, PNG, WebP up to 10MB
-                  </p>
-                </div>
-              </label>
-            </div>
           )}
         </CardContent>
       </Card>

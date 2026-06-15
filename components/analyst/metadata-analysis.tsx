@@ -88,11 +88,39 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                     setFileName(found.fileName);
                     setResult(null);
                     setError(null);
+                    // Check if we already have the analysis result in found.metadata
+                    if (found.metadata && (found.metadata as any).verdict) {
+                        setResult(found.metadata as any);
+                        setIsAnalyzing(false);
+                    } else if (found.status === 'analyzing') {
+                        setIsAnalyzing(true);
+                    } else if (isEmbedded && found.status !== 'complete') {
+                        setIsAnalyzing(true);
+                        setError(null);
+                        try {
+                            const formData = new FormData();
+                            formData.append("imageBase64", found.imageData);
+                            const response = await fetch("/api/metadata-analysis", {
+                                method: "POST",
+                                body: formData,
+                            });
+                            if (!response.ok) {
+                                const errData = await response.json().catch(() => ({}));
+                                throw new Error(errData.error || "Analysis failed");
+                            }
+                            const data: AnalysisResult = await response.json();
+                            setResult(data);
+                        } catch (err) {
+                            setError(err instanceof Error ? err.message : "Analysis failed");
+                        } finally {
+                            setIsAnalyzing(false);
+                        }
+                    }
                 }
             }
         };
         loadPreselected();
-    }, [preselectedEvidenceId]);
+    }, [preselectedEvidenceId, isEmbedded]);
 
     const handleFileSelect = useCallback((files: FileList | null) => {
         if (!files || files.length === 0) return;
@@ -208,15 +236,18 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                     </CardHeader>
                 )}
                 <CardContent>
-                    {isEmbedded && selectedImage ? (
-                        <div className="mb-4">
-                            {!result && (
-                                <Button onClick={analyzeMetadata} disabled={isAnalyzing} className="w-full gap-2">
-                                    {isAnalyzing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing Metadata...</> : <><Eye className="h-4 w-4" /> Run Forensic Analysis</>}
-                                </Button>
-                            )}
+                    {/* In embedded mode: hide the entire upload UI.
+                    The image is loaded automatically from the evidence record
+                    and analysis fires on mount. Show only a status indicator. */}
+                {isEmbedded ? (
+                    isAnalyzing ? (
+                        <div className="flex items-center gap-3 py-3 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            Running forensic metadata analysis…
                         </div>
-                    ) : (
+                    ) : null
+                ) : (
+                    selectedImage ? (
                         <div className="flex flex-col lg:flex-row gap-4">
                             <div className="flex-1">
                                 <div
@@ -228,22 +259,14 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                                     onClick={() => fileInputRef.current?.click()}
                                 >
                                     <input type="file" accept="image/*" onChange={(e) => handleFileSelect(e.target.files)} className="hidden" ref={fileInputRef} />
-                                    {selectedImage ? (
-                                        <div className="flex items-center gap-4">
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={selectedImage} alt="Preview" className="h-20 w-20 object-cover rounded-lg border border-border" />
-                                            <div className="text-left min-w-0">
-                                                <p className="text-sm font-medium text-foreground truncate">{fileName}</p>
-                                                <p className="text-xs text-muted-foreground mt-1">Click or drop to change</p>
-                                            </div>
+                                    <div className="flex items-center gap-4">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={selectedImage} alt="Preview" className="h-20 w-20 object-cover rounded-lg border border-border" />
+                                        <div className="text-left min-w-0">
+                                            <p className="text-sm font-medium text-foreground truncate">{fileName}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Click or drop to change</p>
                                         </div>
-                                    ) : (
-                                        <div>
-                                            <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                                            <p className="text-sm font-medium text-foreground">Drop image here or click to browse</p>
-                                            <p className="text-xs text-muted-foreground mt-1">JPEG, PNG, TIFF — up to 50MB</p>
-                                        </div>
-                                    )}
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex lg:flex-col items-center justify-center gap-3">
@@ -252,7 +275,32 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                                 </Button>
                             </div>
                         </div>
-                    )}
+                    ) : (
+                        <div className="flex flex-col lg:flex-row gap-4">
+                            <div className="flex-1">
+                                <div
+                                    onDrop={handleDrop}
+                                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer ${isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <input type="file" accept="image/*" onChange={(e) => handleFileSelect(e.target.files)} className="hidden" ref={fileInputRef} />
+                                    <div>
+                                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                        <p className="text-sm font-medium text-foreground">Drop image here or click to browse</p>
+                                        <p className="text-xs text-muted-foreground mt-1">JPEG, PNG, TIFF — up to 50MB</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex lg:flex-col items-center justify-center gap-3">
+                                <Button onClick={analyzeMetadata} disabled={!selectedImage || isAnalyzing} className="min-w-[140px] gap-2" size="lg">
+                                    {isAnalyzing ? <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing...</> : <><Eye className="h-4 w-4" /> Run Analysis</>}
+                                </Button>
+                            </div>
+                        </div>
+                    )
+                )}
                     {error && (
                         <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 flex-shrink-0" />{error}

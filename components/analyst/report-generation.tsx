@@ -313,10 +313,22 @@ export default function ReportGeneration() {
           generatedBy: currentUser,
           format: report.format,
         },
-        fullReport: fullReportData, // Include complete report data
+        fullReport: JSON.stringify(fullReportData), // Include complete report data stringified
         timestamp: new Date().toISOString(),
         read: false,
       };
+
+      // Post notification to Postgres DB
+      const apiResponse = await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(notification),
+      });
+
+      if (!apiResponse.ok) {
+        const errData = await apiResponse.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save notification on the server");
+      }
 
       const updatedNotifications = [notification, ...existingNotifications];
       localStorage.setItem('adminNotifications', JSON.stringify(updatedNotifications));

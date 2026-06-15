@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Send, MessageSquare, Users, ArrowLeft, X, Volume2, VolumeX } from "lucide-react";
+import { Search, Send, MessageSquare, Users, ArrowLeft, X, Volume2, VolumeX, Paperclip, File, Folder, Image as ImageIcon, Loader2, ExternalLink, Plus, Video } from "lucide-react";
+import { getAllEvidence, StoredEvidence } from "@/lib/evidence-storage";
 
 interface Contact {
   _id: string;
@@ -157,6 +158,20 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const contactsPollRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [evidenceList, setEvidenceList] = useState<StoredEvidence[]>([]);
+  const [isLoadingEvidence, setIsLoadingEvidence] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState<{
+    type: "evidence" | "file";
+    evidenceId?: string;
+    fileName: string;
+    url: string;
+    mediaType: "image" | "video" | "other";
+  } | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   // Track previous unread counts to detect NEW messages
   const prevUnreadRef = useRef<Record<string, number>>({});
   const activeContactRef = useRef<Contact | null>(null);
@@ -164,6 +179,78 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
 
   // Keep activeContactRef in sync
   useEffect(() => { activeContactRef.current = activeContact; }, [activeContact]);
+
+  const handleOpenEvidenceModal = async () => {
+    setShowEvidenceModal(true);
+    setIsLoadingEvidence(true);
+    try {
+      const allEv = await getAllEvidence();
+      setEvidenceList(allEv);
+    } catch (e) {
+      console.error("Failed to load evidence for attachment:", e);
+    } finally {
+      setIsLoadingEvidence(false);
+    }
+  };
+
+  const handleSelectEvidence = (ev: StoredEvidence) => {
+    setSelectedAttachment({
+      type: "evidence",
+      evidenceId: ev.id || ev._id,
+      fileName: ev.evidenceName || ev.fileName,
+      url: ev.imageData,
+      mediaType: ev.type?.startsWith("video/") ? "video" : (ev.type?.startsWith("image/") ? "image" : "other")
+    });
+    setShowEvidenceModal(false);
+  };
+
+  const handleLocalFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAttachment(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string;
+        try {
+          const res = await fetch("/api/chat-upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileData: base64Data })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setSelectedAttachment({
+              type: "file",
+              fileName: file.name,
+              url: data.url,
+              mediaType: file.type?.startsWith("video/") ? "video" : (file.type?.startsWith("image/") ? "image" : "other")
+            });
+          } else {
+            const errData = await res.json();
+            alert(`Upload failed: ${errData.error || "Unknown error"}`);
+          }
+        } catch (err) {
+          console.error("Error uploading chat file:", err);
+          alert("Failed to upload file. Please try again.");
+        } finally {
+          setIsUploadingAttachment(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Error reading chat file:", err);
+      alert("Failed to read file.");
+      setIsUploadingAttachment(false);
+    } finally {
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleCancelAttachment = () => {
+    setSelectedAttachment(null);
+  };
 
   const triggerNewMessageAlert = useCallback((contact: Contact, msg: string) => {
     if (soundEnabled) playNotificationSound();
@@ -242,21 +329,47 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
   useEffect(() => { if (activeContact) setTimeout(() => inputRef.current?.focus(), 100); }, [activeContact]);
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !activeContact || isSending) return;
+    const messageContent = newMessage.trim();
+    if (!messageContent && !selectedAttachment) return;
+    if (!activeContact || isSending) return;
     setIsSending(true);
+
+    let messageToSend = messageContent;
+    if (selectedAttachment) {
+      messageToSend = JSON.stringify({
+        attachment: selectedAttachment,
+        text: messageContent || undefined
+      });
+    }
+
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toUserId: activeContact._id, message: newMessage.trim() }),
+        body: JSON.stringify({ toUserId: activeContact._id, message: messageToSend }),
       });
       if (res.ok) {
         setNewMessage("");
+        setSelectedAttachment(null);
         await fetchMessages(activeContact._id);
-        setContacts((prev) => prev.map((c) => c._id === activeContact._id ? { ...c, lastMessage: newMessage.trim(), lastMessageAt: new Date().toISOString() } : c));
+        
+        const contactMessageText = selectedAttachment 
+          ? `📎 Attachment: ${selectedAttachment.fileName}` 
+          : messageContent;
+        
+        setContacts((prev) => 
+          prev.map((c) => 
+            c._id === activeContact._id 
+              ? { ...c, lastMessage: contactMessageText, lastMessageAt: new Date().toISOString() } 
+              : c
+          )
+        );
       }
-    } catch (e) { console.error("Failed to send:", e); }
-    finally { setIsSending(false); }
+    } catch (e) { 
+      console.error("Failed to send:", e); 
+    } finally { 
+      setIsSending(false); 
+    }
   };
 
   const openChat = (contact: Contact) => {
@@ -423,7 +536,21 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
                                 </div>
                                 <div className="flex items-center justify-between gap-1 mt-0.5">
                                   <p className={`text-xs truncate ${hasUnread ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                                    {contact.lastMessage || <span className="italic opacity-60">Start a conversation</span>}
+                                    {contact.lastMessage ? (
+                                      (() => {
+                                        try {
+                                          if (contact.lastMessage.startsWith('{') && contact.lastMessage.endsWith('}')) {
+                                            const parsed = JSON.parse(contact.lastMessage);
+                                            if (parsed.attachment) {
+                                              return `📎 Attachment: ${parsed.attachment.fileName}`;
+                                            }
+                                          }
+                                        } catch (e) {}
+                                        return contact.lastMessage;
+                                      })()
+                                    ) : (
+                                      <span className="italic opacity-60">Start a conversation</span>
+                                    )}
                                   </p>
                                   {hasUnread && (
                                     <span className={`shrink-0 min-w-[1.1rem] h-[1.1rem] px-1 ${isNewMsg ? 'bg-green-500' : 'bg-primary'} text-white text-[10px] font-bold rounded-full flex items-center justify-center transition-colors`}>
@@ -514,10 +641,85 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
                         )}
                         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}>
                           {!isMine && <ContactAvatar contact={activeContact} size="sm" />}
-                          <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl shadow-sm ${isMine ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card border border-border text-foreground rounded-bl-sm"}`}>
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.message}</p>
-                            <p className={`text-[10px] mt-1 text-right ${isMine ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{formatMsgTime(msg.createdAt)}</p>
-                          </div>
+                          {(() => {
+                            let parsedAttachment = null;
+                            try {
+                              if (msg.message.trim().startsWith('{') && msg.message.trim().endsWith('}')) {
+                                const parsed = JSON.parse(msg.message);
+                                if (parsed.attachment && parsed.attachment.type) {
+                                  parsedAttachment = parsed;
+                                }
+                              }
+                            } catch (e) {}
+
+                            return (
+                              <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl shadow-sm ${isMine ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card border border-border text-foreground rounded-bl-sm"}`}>
+                                {parsedAttachment ? (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-2 rounded-lg border border-border/10">
+                                      {parsedAttachment.attachment.mediaType === "image" ? (
+                                        <ImageIcon className="h-4 w-4 text-sky-500 shrink-0" />
+                                      ) : parsedAttachment.attachment.mediaType === "video" ? (
+                                        <Video className="h-4 w-4 text-indigo-500 shrink-0" />
+                                      ) : (
+                                        <File className="h-4 w-4 text-amber-500 shrink-0" />
+                                      )}
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-semibold truncate">
+                                          {parsedAttachment.attachment.fileName}
+                                        </p>
+                                        <p className="text-[9px] opacity-70">
+                                          {parsedAttachment.attachment.type === "evidence" 
+                                            ? "Database Evidence" 
+                                            : "Attached File"}
+                                        </p>
+                                      </div>
+                                      <a 
+                                        href={parsedAttachment.attachment.url} 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        className="p-1 rounded bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-all shrink-0"
+                                        title="View attachment"
+                                      >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                      </a>
+                                    </div>
+                                    
+                                    {parsedAttachment.attachment.mediaType === "image" && (
+                                      <div className="relative rounded-lg overflow-hidden border border-border/20 max-h-48 bg-muted">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img 
+                                          src={parsedAttachment.attachment.url} 
+                                          alt={parsedAttachment.attachment.fileName} 
+                                          className="object-cover w-full h-full max-h-48 cursor-pointer hover:scale-105 transition-all"
+                                          onClick={() => window.open(parsedAttachment.attachment.url, '_blank')}
+                                        />
+                                      </div>
+                                    )}
+                                    
+                                    {parsedAttachment.attachment.mediaType === "video" && (
+                                      <div className="relative rounded-lg overflow-hidden border border-border/20 bg-black max-h-48 flex items-center justify-center">
+                                        <video 
+                                          src={parsedAttachment.attachment.url} 
+                                          controls 
+                                          className="w-full h-full max-h-48"
+                                        />
+                                      </div>
+                                    )}
+
+                                    {parsedAttachment.text && (
+                                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words mt-1">
+                                        {parsedAttachment.text}
+                                      </p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.message}</p>
+                                )}
+                                <p className={`text-[10px] mt-1 text-right ${isMine ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{formatMsgTime(msg.createdAt)}</p>
+                              </div>
+                            );
+                          })()}
                           {isMine && (
                             <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-bold text-primary">
                               {getInitials(currentUserName)}
@@ -533,21 +735,115 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
             </div>
 
             {/* Input Bar */}
-            <div className="border-t border-border p-3 bg-card/50 shrink-0">
+            <div className="border-t border-border p-3 bg-card/50 shrink-0 relative">
+              
+              {/* Attachment selector menu */}
+              {showAttachmentMenu && (
+                <div className="absolute bottom-16 left-4 bg-popover border border-border rounded-xl shadow-2xl p-2 z-30 flex flex-col gap-1 w-56 animate-in slide-in-from-bottom-2 fade-in duration-150">
+                  <button
+                    onClick={() => {
+                      setShowAttachmentMenu(false);
+                      handleOpenEvidenceModal();
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground text-left w-full transition-colors"
+                  >
+                    <Folder className="h-4 w-4 text-sky-500" />
+                    Attach Database Evidence
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAttachmentMenu(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground text-left w-full transition-colors"
+                  >
+                    <Plus className="h-4 w-4 text-emerald-500" />
+                    Upload Local File
+                  </button>
+                </div>
+              )}
+
+              {/* Hidden file input for uploading files */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleLocalFileChange}
+              />
+
+              {/* Attachment preview box */}
+              {selectedAttachment && (
+                <div className="mb-3 bg-muted/70 border rounded-xl p-3 flex gap-3 relative items-start animate-in fade-in slide-in-from-bottom-2">
+                  <div className="h-12 w-12 rounded-lg border bg-background flex-shrink-0 overflow-hidden flex items-center justify-center">
+                    {selectedAttachment.mediaType === "image" ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={selectedAttachment.url} alt="" className="object-cover h-full w-full" />
+                    ) : selectedAttachment.mediaType === "video" ? (
+                      <Video className="h-6 w-6 text-indigo-500" />
+                    ) : (
+                      <File className="h-6 w-6 text-amber-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold truncate">{selectedAttachment.fileName}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      {selectedAttachment.type === "evidence" ? "Database Evidence" : "Local File Attachment"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCancelAttachment}
+                    className="text-muted-foreground hover:text-foreground p-1 rounded-full bg-background border hover:shadow-sm"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
               <div className="flex gap-2 items-end">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="icon" 
+                  className="rounded-full h-10 w-10 shrink-0"
+                  onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                  title="Attach file or evidence"
+                  disabled={isUploadingAttachment || isSending}
+                >
+                  {isUploadingAttachment ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+
                 <div className="flex-1 relative">
                   <input
                     ref={inputRef}
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder={`Message ${activeContact.name.split(" ")[0]}...`}
+                    onKeyDown={(e) => { 
+                      if (e.key === "Enter" && !e.shiftKey) { 
+                        e.preventDefault(); 
+                        handleSend(); 
+                      } 
+                    }}
+                    placeholder={selectedAttachment ? "Add a caption..." : `Message ${activeContact.name.split(" ")[0]}...`}
                     className="w-full px-4 py-2.5 text-sm bg-background border border-border rounded-full text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
                   />
                 </div>
-                <Button size="icon" className="rounded-full h-10 w-10 shrink-0 shadow-md" onClick={handleSend} disabled={!newMessage.trim() || isSending}>
-                  {isSending ? <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" /> : <Send className="h-4 w-4" />}
+                
+                <Button 
+                  size="icon" 
+                  className="rounded-full h-10 w-10 shrink-0 shadow-md" 
+                  onClick={handleSend} 
+                  disabled={isSending || isUploadingAttachment || (!newMessage.trim() && !selectedAttachment)}
+                >
+                  {isSending ? (
+                    <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground text-center mt-1.5">Press Enter to send</p>
@@ -555,6 +851,58 @@ export default function ChatPanel({ currentUserId, currentUserName }: ChatPanelP
           </>
         )}
       </div>
+
+      {/* ── Evidence Selector Modal ── */}
+      {showEvidenceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div>
+                <h3 className="font-bold text-lg text-foreground">Select Evidence</h3>
+                <p className="text-xs text-muted-foreground">Choose an evidence file from the database to attach</p>
+              </div>
+              <button onClick={() => setShowEvidenceModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {isLoadingEvidence ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  Loading database evidence...
+                </div>
+              ) : evidenceList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
+                  No evidence records found in the database.
+                </div>
+              ) : (
+                evidenceList.map((ev) => (
+                  <button
+                    key={ev.id || ev._id}
+                    onClick={() => handleSelectEvidence(ev)}
+                    className="w-full flex items-center gap-3 p-3 border rounded-xl bg-muted/30 hover:bg-muted text-left transition-colors"
+                  >
+                    <div className="h-12 w-12 rounded bg-background border flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      {ev.imageData ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={ev.imageData} alt="" className="object-cover h-full w-full" />
+                      ) : ev.type?.startsWith("video/") ? (
+                        <Video className="h-5 w-5 text-indigo-500" />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate text-foreground">{ev.evidenceName || ev.fileName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{ev.caseName || "Unassigned Case"}</p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

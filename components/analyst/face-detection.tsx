@@ -80,6 +80,77 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
   const [threshold, setThreshold] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
 
+  const executeFaceDetection = async (file: File) => {
+    setIsProcessing(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("detector", detector);
+      formData.append("model", model);
+      formData.append("threshold", threshold.toString());
+      formData.append("database_path", "database/");
+
+      const response = await fetch("/api/face/detect-and-search", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to process image");
+      }
+
+      setResult(data);
+
+      // Save face detection results to evidence storage
+      if (data.success) {
+        // Check if evidence already exists for this image
+        const allEvidence = await getAllEvidence();
+        const evidence = allEvidence.find((e: StoredEvidence) => e.fileName === file.name);
+
+        if (!evidence) {
+          // Create new evidence entry
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            const preview = e.target?.result as string;
+            const evidenceData: StoredEvidence = {
+              fileName: file.name,
+              imageData: preview,
+              uploadDate: new Date().toISOString(),
+              status: "complete",
+              result: null,
+              size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+              type: file.type,
+              faceDetection: {
+                faces_detected: data.faces_detected || 0,
+                matches: data.matches || []
+              }
+            };
+            await saveEvidence(evidenceData);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          // Update existing evidence with face detection results
+          evidence.faceDetection = {
+            faces_detected: data.faces_detected || 0,
+            matches: data.matches || []
+          };
+          await saveEvidence(evidence);
+        }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      setError(errorMessage);
+      console.error("Face detection error:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   useEffect(() => {
     const loadPreselected = async () => {
       if (preselectedEvidenceId) {
@@ -97,7 +168,18 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
             reader.readAsDataURL(file);
 
             setError(null);
-            setResult(null);
+
+            if (found.faceDetection && found.faceDetection.faces_detected !== undefined) {
+              setResult({
+                success: true,
+                faces_detected: found.faceDetection.faces_detected,
+                matches: found.faceDetection.matches
+              });
+            } else if (isEmbedded) {
+              executeFaceDetection(file);
+            } else {
+              setResult(null);
+            }
           } catch (e) {
             console.error("Failed to load preselected evidence", e);
           }
@@ -105,7 +187,7 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
       }
     };
     loadPreselected();
-  }, [preselectedEvidenceId]);
+  }, [preselectedEvidenceId, isEmbedded]);
 
   const handleFileSelect = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -132,75 +214,7 @@ export default function FaceDetection({ preselectedEvidenceId, isEmbedded = fals
       setError("Please select an image first");
       return;
     }
-
-    setIsProcessing(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("image", selectedFile);
-      formData.append("detector", detector);
-      formData.append("model", model);
-      formData.append("threshold", threshold.toString());
-      formData.append("database_path", "database/");
-
-      const response = await fetch("/api/face/detect-and-search", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to process image");
-      }
-
-      setResult(data);
-
-      // Save face detection results to evidence storage
-      if (data.success && selectedFile) {
-        // Check if evidence already exists for this image
-        const allEvidence = await getAllEvidence();
-        const evidence = allEvidence.find((e: StoredEvidence) => e.fileName === selectedFile.name);
-
-        if (!evidence) {
-          // Create new evidence entry
-          const reader = new FileReader();
-          reader.onload = async (e) => {
-            const preview = e.target?.result as string;
-            const evidenceData: StoredEvidence = {
-              fileName: selectedFile.name,
-              imageData: preview,
-              uploadDate: new Date().toISOString(),
-              status: "complete",
-              result: null,
-              size: `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`,
-              type: selectedFile.type,
-              faceDetection: {
-                faces_detected: data.faces_detected || 0,
-                matches: data.matches || []
-              }
-            };
-            await saveEvidence(evidenceData);
-          };
-          reader.readAsDataURL(selectedFile);
-        } else {
-          // Update existing evidence with face detection results
-          evidence.faceDetection = {
-            faces_detected: data.faces_detected || 0,
-            matches: data.matches || []
-          };
-          await saveEvidence(evidence);
-        }
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An error occurred";
-      setError(errorMessage);
-      console.error("Face detection error:", err);
-    } finally {
-      setIsProcessing(false);
-    }
+    await executeFaceDetection(selectedFile);
   };
 
   const handleClear = () => {

@@ -4,12 +4,12 @@ import { findUserByEmail, verifyPassword } from '@/lib/models/User';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, userType } = body;
+    const { email, password } = body;
 
     // Validate input
-    if (!email || !password || !userType) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email, password, and user type are required' },
+        { error: 'Email and password are required' },
         { status: 400 }
       );
     }
@@ -23,15 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify user type matches
-    if (user.userType !== userType) {
-      return NextResponse.json(
-        { error: 'User type does not match' },
-        { status: 401 }
-      );
-    }
 
-    // Verify password
     const isPasswordValid = await verifyPassword(password, user.password);
     if (!isPasswordValid) {
       return NextResponse.json(

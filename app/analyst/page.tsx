@@ -48,7 +48,7 @@ import MetadataAnalysis from "@/components/analyst/metadata-analysis";
 import DashboardOverview from "@/components/analyst/dashboard-overview";
 import ThemeToggle from "@/components/theme-toggle";
 import EvidenceDetail from "@/components/analyst/evidence-detail";
-import { getUserStats } from "@/lib/evidence-storage";
+import { getUserStats, getEvidenceById } from "@/lib/evidence-storage";
 import ChatPanel from "@/components/analyst/chat-panel";
 import VideoDetection from "@/components/analyst/video-detection";
 
@@ -74,6 +74,9 @@ export default function AnalystPage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [preselectedCaseId, setPreselectedCaseId] = useState<string | null>(null);
   const [viewingEvidenceId, setViewingEvidenceId] = useState<string | null>(null);
+  const [currentEvidenceName, setCurrentEvidenceName] = useState<string>("");
+  const [currentCaseName, setCurrentCaseName] = useState<string>("");
+  const [currentCaseId, setCurrentCaseId] = useState<string>("");
   const [preselectedEvidenceId, setPreselectedEvidenceId] = useState<string | null>(null);
   const [evidenceDetailInitialTab, setEvidenceDetailInitialTab] = useState<string>("details");
   const [autoStartAnalysis, setAutoStartAnalysis] = useState(false);
@@ -138,6 +141,22 @@ export default function AnalystPage() {
       clearInterval(statsInterval);
     };
   }, [router]);
+  
+  useEffect(() => {
+    if (viewingEvidenceId) {
+      getEvidenceById(viewingEvidenceId).then((evidence) => {
+        if (evidence) {
+          setCurrentEvidenceName(evidence.evidenceName || evidence.fileName);
+          setCurrentCaseName(evidence.caseName || "Uncategorized Case");
+          setCurrentCaseId(evidence.caseId || "");
+        }
+      });
+    } else {
+      setCurrentEvidenceName("");
+      setCurrentCaseName("");
+      setCurrentCaseId("");
+    }
+  }, [viewingEvidenceId]);
 
   // Poll unread message count
   useEffect(() => {
@@ -193,6 +212,57 @@ export default function AnalystPage() {
     setActiveTab(tab);
     // Immediately clear unread badge when opening Chats tab
     if (tab === "chats") setUnreadMessages(0);
+  };
+
+  const renderBreadcrumbs = () => {
+    const breadcrumbClass = "text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer";
+    const activeClass = "text-xs font-semibold text-foreground";
+    const separator = <ChevronRight className="h-3 w-3 text-muted-foreground/60 mx-1 shrink-0" />;
+
+    const items = [
+      <span key="home" className={activeTab === "overview" ? activeClass : breadcrumbClass} onClick={() => handleTabChange("overview")}>
+        Dashboard
+      </span>
+    ];
+
+    if (activeTab !== "overview") {
+      items.push(separator);
+      
+      if (activeTab === "evidence-detail") {
+        items.push(
+          <span key="records" className={breadcrumbClass} onClick={() => handleTabChange("records")}>
+            Evidence Records
+          </span>
+        );
+        items.push(separator);
+        if (currentCaseName) {
+          items.push(
+            <span key="case" className={breadcrumbClass} onClick={() => handleTabChange("records")}>
+              {currentCaseName}
+            </span>
+          );
+          items.push(separator);
+        }
+        items.push(
+          <span key="detail" className={activeClass}>
+            {currentEvidenceName || "Evidence Detail"}
+          </span>
+        );
+      } else {
+        const currentTabLabel = tabs.find(t => t.id === activeTab)?.label || "Page";
+        items.push(
+          <span key="current" className={activeClass}>
+            {currentTabLabel}
+          </span>
+        );
+      }
+    }
+
+    return (
+      <div className="flex items-center gap-1 overflow-x-auto py-1 whitespace-nowrap scrollbar-none">
+        {items}
+      </div>
+    );
   };
 
   return (
@@ -316,9 +386,15 @@ export default function AnalystPage() {
 
         {/* Desktop Header / Breadcrumbs */}
         <header className="hidden lg:flex h-16 border-b border-border items-center justify-between px-8 bg-card/50 backdrop-blur-sm z-10">
-          <div>
-            <h2 className="text-lg font-semibold">{tabs.find(t => t.id === activeTab)?.label}</h2>
-            <p className="text-xs text-muted-foreground">Manage and analyze your digital evidence</p>
+          <div className="flex flex-col gap-0.5">
+            {renderBreadcrumbs()}
+            <p className="text-[11px] text-muted-foreground">
+              {activeTab === "evidence-detail" 
+                ? "Detailed analysis of forensic evidence" 
+                : (tabs.find(t => t.id === activeTab)?.label === "Overview" 
+                  ? "System metrics, activity, and overview charts" 
+                  : `Manage and analyze your digital evidence: ${tabs.find(t => t.id === activeTab)?.label}`)}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
