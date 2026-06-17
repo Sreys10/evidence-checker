@@ -193,6 +193,13 @@ export async function deleteCase(id: string, userId?: string): Promise<void> {
 
 export async function getEvidenceByCase(caseId: string, userId?: string): Promise<StoredEvidence[]> {
   try {
+    // Use server-side filter — avoids fetching all evidence and filtering in JS
+    const res = await fetch(`/api/evidence/by-case/${caseId}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.evidence.map((e: any) => ({ ...e, id: e._id || e.id }));
+    }
+    // Fallback: fetch all and filter (legacy path)
     const all = await getAllEvidence(userId);
     return all.filter(e => e.caseId === caseId);
   } catch (error) {
@@ -209,6 +216,13 @@ export async function getUserStats(userId?: string): Promise<{
   onBlockchain: number;
 }> {
   try {
+    // Use the lightweight aggregate endpoint — single SQL query, no row data transferred
+    const res = await fetch('/api/stats');
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+    // Fallback: calculate from evidence list (old path — will hit Neon harder)
     const [allEvidence, allCases] = await Promise.all([
       getAllEvidence(userId),
       getAllCases(userId)

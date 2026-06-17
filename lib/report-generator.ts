@@ -50,6 +50,16 @@ export interface ReportData {
       face_image_base64: string;
     }>;
   };
+  weaponDetection?: {
+    weaponsFound: boolean;
+    weaponsDetected: string[];
+    detections: Array<{
+      class: string;
+      confidence: number;
+      bbox: { x: number; y: number; width: number; height: number };
+    }>;
+    totalDetections: number;
+  };
 }
 
 export const generateHTMLReport = (data: ReportData): string => {
@@ -66,6 +76,16 @@ export const generateHTMLReport = (data: ReportData): string => {
     hour: '2-digit',
     minute: '2-digit'
   });
+
+  let currentSection = 6;
+  const faceSectionNum = data.faceDetection ? currentSection++ : 0;
+  const weaponSectionNum = data.weaponDetection ? currentSection++ : 0;
+  const aiSectionNum = data.aiDetection ? currentSection++ : 0;
+  const riskSectionNum = currentSection++;
+  const recSectionNum = currentSection++;
+  const cocSectionNum = currentSection++;
+  const concSectionNum = currentSection++;
+  const appSectionNum = currentSection++;
 
   return `
 <!DOCTYPE html>
@@ -610,7 +630,7 @@ export const generateHTMLReport = (data: ReportData): string => {
       ${data.faceDetection ? `
       <!-- Face Detection Analysis -->
       <div class="section">
-        <h2 class="section-title">6. Face Detection & Recognition Analysis</h2>
+        <h2 class="section-title">${faceSectionNum}. Face Detection & Recognition Analysis</h2>
         <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
           Advanced face detection and recognition analysis was performed to identify individuals in the image 
           and match them against the registered database. This analysis helps verify the identity of persons 
@@ -633,7 +653,7 @@ export const generateHTMLReport = (data: ReportData): string => {
         </div>
 
         ${data.faceDetection.matches && data.faceDetection.matches.length > 0 ? `
-        <h3 class="subsection-title">6.1 Face Recognition Results</h3>
+        <h3 class="subsection-title">${faceSectionNum}.1 Face Recognition Results</h3>
         <div style="display: grid; gap: 20px; margin: 25px 0;">
           ${data.faceDetection.matches.map((match) => `
           <div style="background: ${match.match_found ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' : 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'}; border: 2px solid ${match.match_found ? '#22c55e' : '#f59e0b'}; border-radius: 12px; padding: 25px;">
@@ -727,10 +747,52 @@ export const generateHTMLReport = (data: ReportData): string => {
       </div>
       ` : ''}
 
+      ${data.weaponDetection ? `
+      <!-- Weapon Detection Analysis -->
+      <div class="section">
+        <h2 class="section-title">${weaponSectionNum}. Weapon & Threat Detection Analysis</h2>
+        <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
+          An automated threat detection scan was performed on the evidence using the YOLOv8 machine learning model 
+          to identify firearms, knives, and other tracked weapon classes. This analysis helps determine the presence 
+          of security threats or weapon-related evidence.
+        </p>
+        
+        <div style="background: ${data.weaponDetection.weaponsFound ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'}; border: 2px solid ${data.weaponDetection.weaponsFound ? '#ef4444' : '#10b981'}; border-radius: 12px; padding: 25px; margin: 20px 0;">
+          <h3 style="color: ${data.weaponDetection.weaponsFound ? '#991b1b' : '#14532d'}; margin-bottom: 15px; font-size: 20px;">Weapon Detection Summary</h3>
+          <p style="color: ${data.weaponDetection.weaponsFound ? '#b91c1c' : '#15803d'}; font-size: 18px; font-weight: 600; margin-bottom: 10px;">
+            Verdict: <strong>${data.weaponDetection.weaponsFound ? 'WEAPONS DETECTED' : 'NO WEAPONS FOUND'}</strong>
+          </p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.7;">
+            ${data.weaponDetection.weaponsFound
+              ? `A total of <strong>${data.weaponDetection.totalDetections}</strong> weapon(s) or threat object(s) were detected in the image: <strong>${data.weaponDetection.weaponsDetected.join(", ")}</strong>.`
+              : "No weapons or threat objects were identified in this image."
+            }
+          </p>
+        </div>
+
+        ${data.weaponDetection.weaponsFound && data.weaponDetection.detections.length > 0 ? `
+        <h3 class="subsection-title">${weaponSectionNum}.1 Detected Threats</h3>
+        <div style="display: grid; gap: 15px; margin: 20px 0;">
+          ${data.weaponDetection.detections.map((det) => `
+          <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="color: #ef4444; font-size: 16px;">${det.class}</strong>
+              <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Bounding Box: X=${det.bbox.x}, Y=${det.bbox.y}, W=${det.bbox.width}, H=${det.bbox.height}</div>
+            </div>
+            <span style="background: #ef4444; color: white; padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; font-family: monospace;">
+              ${det.confidence.toFixed(1)}% Confidence
+            </span>
+          </div>
+          `).join("")}
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
+
       ${data.aiDetection ? `
       <!-- AI-Powered Detection Analysis -->
       <div class="section">
-        <h2 class="section-title">${data.faceDetection ? '7' : '6'}. AI-Powered Detection Analysis</h2>
+        <h2 class="section-title">${aiSectionNum}. AI-Powered Detection Analysis</h2>
         <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
           Advanced machine learning models were employed to detect synthetic content, deepfake manipulation, 
           AI-generated imagery, and other sophisticated tampering techniques that may not be detectable through 
@@ -761,7 +823,7 @@ export const generateHTMLReport = (data: ReportData): string => {
         </div>
 
         <div class="detailed-analysis" style="margin-top: 30px;">
-          <h3 class="subsection-title">6.1 Detailed AI Analysis Findings</h3>
+          <h3 class="subsection-title">${aiSectionNum}.1 Detailed AI Analysis Findings</h3>
           
           <div class="analysis-item">
             <h4>Deepfake Detection Analysis</h4>
@@ -818,7 +880,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Risk Assessment -->
       <div class="section">
-        <h2 class="section-title">${data.faceDetection ? '8' : '7'}. Risk Assessment & Classification</h2>
+        <h2 class="section-title">${riskSectionNum}. Risk Assessment & Classification</h2>
         <div style="background: ${riskColor}15; border: 2px solid ${riskColor}; border-radius: 12px; padding: 25px; margin: 20px 0;">
           <div style="display: flex; align-items: center; margin-bottom: 15px;">
             <h3 style="color: ${riskColor}; font-size: 22px; margin: 0; margin-right: 15px;">Risk Level: ${riskLevel}</h3>
@@ -840,7 +902,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Recommendations -->
       <div class="section">
-        <h2 class="section-title">${data.faceDetection ? '9' : '8'}. Recommendations & Next Steps</h2>
+        <h2 class="section-title">${recSectionNum}. Recommendations & Next Steps</h2>
         <div class="recommendations">
           <h4>Forensic Analysis Recommendations</h4>
           <ul>
@@ -872,7 +934,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Chain of Custody -->
       <div class="section">
-        <h2 class="section-title">${data.faceDetection ? '10' : '9'}. Chain of Custody</h2>
+        <h2 class="section-title">${cocSectionNum}. Chain of Custody</h2>
         <div class="chain-of-custody">
           <p style="margin-bottom: 15px; color: #374151; font-weight: 600;">
             Evidence handling and analysis timeline:
@@ -912,7 +974,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Conclusion -->
       <div class="section">
-        <h2 class="section-title">${data.faceDetection ? '11' : '10'}. Final Conclusion</h2>
+        <h2 class="section-title">${concSectionNum}. Final Conclusion</h2>
         <div style="background: ${data.status === "authentic" ? "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)" : "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)"}; border: 3px solid ${statusColor}; border-radius: 12px; padding: 30px; margin: 25px 0;">
           <h3 style="color: ${statusColor}; font-size: 22px; margin-bottom: 20px; font-weight: 700;">
             ${statusIcon} FINAL VERDICT: ${data.status.toUpperCase()}
@@ -947,7 +1009,7 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Technical Appendix -->
       <div class="section page-break">
-        <h2 class="section-title">${data.faceDetection ? '12' : '11'}. Technical Appendix</h2>
+        <h2 class="section-title">${appSectionNum}. Technical Appendix</h2>
         <div class="technical-details">
           <p><strong>Report Technical Information:</strong></p>
           <p><code>Report ID:</code> ${data.id}</p>
@@ -964,6 +1026,10 @@ export const generateHTMLReport = (data: ReportData): string => {
           ${data.faceDetection ? `
           <p><code>Faces Detected:</code> ${data.faceDetection.faces_detected}</p>
           <p><code>Matches Found:</code> ${data.faceDetection.matches.filter(m => m.match_found).length} of ${data.faceDetection.matches.length}</p>
+          ` : ''}
+          ${data.weaponDetection ? `
+          <p><code>Weapons Detected:</code> ${data.weaponDetection.weaponsFound ? 'YES' : 'NO'}</p>
+          <p><code>Total Weapon Detections:</code> ${data.weaponDetection.totalDetections}</p>
           ` : ''}
           <p style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #d1d5db;">
             <strong>Analysis Tools:</strong> Advanced computer vision algorithms, metadata forensics, compression artifact analysis, 

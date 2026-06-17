@@ -24,7 +24,13 @@ interface DatabasePerson {
   id: string;
   person_name: string;
   image_path: string;
+  /** Full base64 — only present in individual /person/:id fetch */
   image_base64?: string;
+  /** Compact thumbnail returned by the list endpoint (80×80 JPEG or Cloudinary URL) */
+  image_thumbnail?: string;
+  /** Cloudinary CDN URL stored at add-time */
+  image_url?: string;
+  has_image?: boolean;
   name?: string;
   age?: number;
   email?: string;
@@ -426,9 +432,10 @@ export default function FaceDatabase() {
               {persons.map((person) => (
                 <Card key={person.id} className="overflow-hidden">
                   <div className="relative">
-                    {person.image_base64 ? (
+                    {/* Use compact thumbnail for list view; fall back to full base64 if old record */}
+                    {(person.image_thumbnail || person.image_url || person.image_base64) ? (
                       <img
-                        src={person.image_base64}
+                        src={person.image_thumbnail || person.image_url || person.image_base64}
                         alt={person.person_name}
                         className="w-full h-48 object-cover"
                       />

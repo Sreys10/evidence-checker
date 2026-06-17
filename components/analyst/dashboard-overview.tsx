@@ -50,6 +50,30 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
     const [trendData, setTrendData] = useState<{ display: string; uploads: number }[]>([]);
     const [donutData, setDonutData] = useState<{ name: string; value: number; color: string }[]>([]);
     const [caseResolutionData, setCaseResolutionData] = useState<{ name: string; value: number; color: string }[]>([]);
+    const [currentTime, setCurrentTime] = useState<string>("");
+
+    useEffect(() => {
+        const updateTime = () => {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            });
+            const timeStr = now.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true,
+            });
+            setCurrentTime(`${dateStr} | ${timeStr}`);
+        };
+
+        updateTime();
+        const timer = setInterval(updateTime, 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const updateData = async () => {
@@ -183,6 +207,12 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                     <p className="text-muted-foreground mt-1">
                         Welcome back. Here's your real-time evidence analysis.
                     </p>
+                    {currentTime && (
+                        <p className="text-sm font-mono text-muted-foreground/80 mt-1.5 flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            {currentTime}
+                        </p>
+                    )}
                 </div>
                 <div className="flex gap-2">
                     <Button onClick={() => onNavigate("upload")} className="gap-2">

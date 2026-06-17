@@ -1,11 +1,18 @@
-import { Pool } from '@neondatabase/serverless';
+import { Pool } from 'pg';
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not configured. Please add it to your .env.local file.');
 }
 
 // Pool supports standard parameterized queries: pool.query(text, params[])
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Works with any PostgreSQL provider: Supabase, Neon, Railway, Render, local, etc.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
 
 /**
  * Execute a raw parameterized SQL query.

@@ -12,6 +12,7 @@ import {
   type StoredEvidence,
   type StoredCase,
 } from "@/lib/evidence-storage";
+import { uploadToCloudinaryDirect } from "@/lib/cloudinary-upload";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -347,61 +348,113 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
           }, 150);
         };
 
-        if (isVideo) {
-          if (file.size <= 10 * 1024 * 1024) {
-            // Under 10MB: read actual video to base64 for full playback and remote hosting
+        // ── Direct Cloudinary upload (browser → CDN, zero Vercel bandwidth) ───
+        // For all files we upload directly to Cloudinary from the browser.
+        // This avoids the expensive base64 encode + POST through Vercel/Neon.
+        const saveAndTrackEvidenceWithUrl = (cloudinaryUrl: string, localPreviewUrl?: string) => {
+          const newFile: UploadedFile = {
+            id: fileId,
+            file,
+            preview: localPreviewUrl || cloudinaryUrl,
+            status: "uploading",
+            progress: 0,
+            size: formatFileSize(file.size),
+            type: file.type,
+            evidenceName: eName,
+          };
+          setUploadedFiles((prev) => [...prev, newFile]);
+
+          const evidenceData: StoredEvidence = {
+            fileName: file.name,
+            imageData: cloudinaryUrl,   // CDN URL — tiny string, not a base64 blob
+            uploadDate: new Date().toISOString(),
+            status: "pending",
+            size: formatFileSize(file.size),
+            type: file.type,
+            caseId: selectedCase.id || (selectedCase as any)._id,
+            caseNumber: selectedCase.caseNumber,
+            caseName: selectedCase.caseName,
+            evidenceName: eName,
+          };
+
+          saveEvidence(evidenceData).then((saved) => {
+            if (saved) {
+              const savedId = saved.id || saved._id;
+              setUploadedFiles((prev) =>
+                prev.map((f) =>
+                  f.id === fileId ? { ...f, dbId: savedId } : f
+                )
+              );
+              const imageUrl = saved.imageData;
+              setTimeout(() => {
+                triggerAutoAnalysis(fileId, savedId!, imageUrl);
+              }, 600);
+            }
+          });
+
+          const interval = setInterval(() => {
+            setUploadedFiles((prev) =>
+              prev.map((f) => {
+                if (f.id === fileId) {
+                  const newProgress = Math.min(f.progress + 15, 100);
+                  if (newProgress === 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                      setUploadedFiles((prev) =>
+                        prev.map((f) =>
+                          f.id === fileId
+                            ? { ...f, status: "success" as const }
+                            : f
+                        )
+                      );
+                    }, 400);
+                  }
+                  return { ...f, progress: newProgress };
+                }
+                return f;
+              })
+            );
+          }, 150);
+        };
+
+        // Create a local object URL for immediate preview while uploading
+        const localPreview = URL.createObjectURL(file);
+
+        // Show a placeholder card immediately
+        setUploadedFiles((prev) => [
+          ...prev,
+          {
+            id: fileId,
+            file,
+            preview: localPreview,
+            status: "uploading" as const,
+            progress: 0,
+            size: formatFileSize(file.size),
+            type: file.type,
+            evidenceName: eName,
+          },
+        ]);
+
+        // Upload directly to Cloudinary from the browser (no Vercel, no Neon blobs)
+        uploadToCloudinaryDirect(file)
+          .then((cloudinaryUrl) => {
+            // Remove the placeholder and do the real save
+            setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
+            URL.revokeObjectURL(localPreview);
+            saveAndTrackEvidenceWithUrl(cloudinaryUrl, cloudinaryUrl);
+          })
+          .catch((err) => {
+            console.error("Cloudinary direct upload failed:", err);
+            // Fallback: read as data URL and go through Vercel (old path)
             const reader = new FileReader();
             reader.onload = (e) => {
-              const videoBase64 = e.target?.result as string;
-              saveAndTrackEvidence(videoBase64);
+              const preview = e.target?.result as string;
+              setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
+              URL.revokeObjectURL(localPreview);
+              saveAndTrackEvidence(preview);
             };
             reader.readAsDataURL(file);
-          } else {
-            // Fallback for large videos: extract thumbnail frame
-            const videoEl = document.createElement("video");
-            videoEl.preload = "metadata";
-            videoEl.muted = true;
-            videoEl.playsInline = true;
-            videoEl.src = URL.createObjectURL(file);
-
-            videoEl.onloadedmetadata = () => {
-              videoEl.currentTime = 0.5;
-            };
-
-            videoEl.onseeked = () => {
-              try {
-                const canvas = document.createElement("canvas");
-                canvas.width = 320;
-                canvas.height = 180;
-                const ctx = canvas.getContext("2d");
-                if (ctx) {
-                  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                  const base64Preview = canvas.toDataURL("image/jpeg", 0.8);
-                  saveAndTrackEvidence(base64Preview);
-                } else {
-                  saveAndTrackEvidence("");
-                }
-              } catch (err) {
-                saveAndTrackEvidence("");
-              } finally {
-                URL.revokeObjectURL(videoEl.src);
-              }
-            };
-
-            videoEl.onerror = () => {
-              saveAndTrackEvidence("");
-              URL.revokeObjectURL(videoEl.src);
-            };
-          }
-        } else {
-          // Standard FileReader for image files
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const preview = e.target?.result as string;
-            saveAndTrackEvidence(preview);
-          };
-          reader.readAsDataURL(file);
-        }
+          });
       });
 
       setEvidenceNameInput("");

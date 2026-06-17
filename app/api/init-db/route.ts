@@ -68,9 +68,15 @@ export async function GET() {
         blockchain_hash  TEXT,
         ipfs_hash        TEXT,
         report_generated BOOLEAN DEFAULT FALSE,
-        face_detection   JSONB
+        face_detection   JSONB,
+        weapon_detection JSONB
       )
     `;
+
+    // Safety: ensure weapon_detection column exists (for databases created before this was added)
+    await sql`
+      ALTER TABLE evidence ADD COLUMN IF NOT EXISTS weapon_detection JSONB
+    `.catch(() => {/* OK */});
 
     // Create messages table (for admin-analyst chat)
     await sql`

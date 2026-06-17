@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -11,6 +11,7 @@ import {
   Loader2, Crosshair, AlertTriangle, CheckCircle2,
   Target, Info, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { saveEvidence, getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 
 // ── Types ────────────────────────────────────────────────────
 interface WeaponDetection {
@@ -58,16 +59,86 @@ function ConfBar({ value }: { value: number }) {
   );
 }
 
+// Helper to convert base64/URL to file
+const dataURLtoFile = async (dataUrl: string, filename: string): Promise<File> => {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type });
+};
+
+interface WeaponDetectionProps {
+  preselectedEvidenceId?: string | null;
+  isEmbedded?: boolean;
+}
+
 // ════════════════════════════════════════════════════════════
 //  Main Component
 // ════════════════════════════════════════════════════════════
-export default function WeaponDetection() {
+export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = false }: WeaponDetectionProps) {
   const [file,       setFile]       = useState<File | null>(null);
   const [preview,    setPreview]    = useState<string | null>(null);
   const [scanning,   setScanning]   = useState(false);
   const [result,     setResult]     = useState<WeaponResult | null>(null);
   const [error,      setError]      = useState<string | null>(null);
   const [showRaw,    setShowRaw]    = useState(false);
+
+  // ── load preselected evidence ────────────────────────────
+  useEffect(() => {
+    const loadPreselected = async () => {
+      if (preselectedEvidenceId) {
+        const all = await getAllEvidence();
+        const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
+        if (found && found.imageData) {
+          try {
+            const f = await dataURLtoFile(found.imageData, found.fileName);
+            setFile(f);
+            setError(null);
+            setPreview(found.imageData);
+            
+            if (found.weaponDetection && (found.weaponDetection as any).weaponsFound !== undefined) {
+              const wd = found.weaponDetection as any;
+              setResult({
+                weaponsFound:    wd.weaponsFound    ?? false,
+                weaponsDetected: wd.weaponsDetected ?? [],
+                detections:      wd.detections      ?? [],
+                anomalies:       wd.anomalies       ?? [],
+                totalDetections: wd.totalDetections ?? 0,
+                rawResult:       wd.rawResult       ?? null,
+              });
+            } else if (isEmbedded) {
+              // Auto-scan on embed if not already run
+              setScanning(true);
+              const fd = new FormData();
+              fd.append("image", f);
+              const res  = await fetch("/api/weapon-detection", { method: "POST", body: fd });
+              const data = await res.json();
+              if (!res.ok || !data.success) throw new Error(data.details || data.error || "Detection failed");
+              
+              const resultData = {
+                weaponsFound:    data.weaponsFound    ?? false,
+                weaponsDetected: data.weaponsDetected ?? [],
+                detections:      data.detections      ?? [],
+                anomalies:       data.anomalies       ?? [],
+                totalDetections: data.totalDetections ?? 0,
+                rawResult:       data.rawResult       ?? null,
+              };
+              setResult(resultData);
+              
+              // Update evidence
+              found.weaponDetection = resultData;
+              await saveEvidence(found);
+            }
+          } catch (e) {
+            console.error("Failed to load preselected evidence in weapon detection", e);
+            setError(e instanceof Error ? e.message : "Unknown error");
+          } finally {
+            setScanning(false);
+          }
+        }
+      }
+    };
+    loadPreselected();
+  }, [preselectedEvidenceId, isEmbedded]);
 
   // ── pick file ───────────────────────────────────────────
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,14 +166,25 @@ export default function WeaponDetection() {
       const res  = await fetch("/api/weapon-detection", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.details || data.error || "Detection failed");
-      setResult({
+      
+      const resultData = {
         weaponsFound:    data.weaponsFound    ?? false,
         weaponsDetected: data.weaponsDetected ?? [],
         detections:      data.detections      ?? [],
         anomalies:       data.anomalies       ?? [],
         totalDetections: data.totalDetections ?? 0,
         rawResult:       data.rawResult       ?? null,
-      });
+      };
+      setResult(resultData);
+
+      if (preselectedEvidenceId) {
+        const allEvidence = await getAllEvidence();
+        const evidence = allEvidence.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
+        if (evidence) {
+          evidence.weaponDetection = resultData;
+          await saveEvidence(evidence);
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {

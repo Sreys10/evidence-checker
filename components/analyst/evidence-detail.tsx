@@ -33,6 +33,7 @@ import TamperingDetection from "./tampering-detection";
 import VideoDetection from "./video-detection";
 import MetadataAnalysis from "./metadata-analysis";
 import FaceAnalysis from "./face-analysis";
+import WeaponDetection from "./weapon-detection";
 import { motion } from "framer-motion";
 import { uploadToIPFS } from "@/lib/ipfs-service";
 import { connectWallet, storeHashOnBlockchain } from "@/lib/web3-service";
@@ -202,6 +203,8 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
             metadata: evidence.metadata,
             anomalies: evidence.anomalies,
             aiDetection: evidence.aiDetection,
+            faceDetection: evidence.faceDetection,
+            weaponDetection: evidence.weaponDetection,
         };
 
         // Download as PDF
@@ -268,6 +271,8 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                 metadata: evidence.metadata,
                 anomalies: evidence.anomalies,
                 aiDetection: evidence.aiDetection,
+                faceDetection: evidence.faceDetection,
+                weaponDetection: evidence.weaponDetection,
             };
 
             const notification = {
@@ -548,7 +553,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                 <div className="lg:col-span-4 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/60 shadow-sm overflow-hidden">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                         <div className="px-4 pt-4 pb-2 border-b border-border/40 bg-muted/5">
-                            <TabsList className={`w-full grid bg-muted/50 p-1 ${evidence.type?.startsWith('video/') ? 'grid-cols-3' : 'grid-cols-4'}`}>
+                            <TabsList className={`w-full grid bg-muted/50 p-1 ${evidence.type?.startsWith('video/') ? 'grid-cols-3' : 'grid-cols-5'}`}>
                                 <TabsTrigger value="details">Info</TabsTrigger>
                                 {evidence.type?.startsWith('video/') ? (
                                     <>
@@ -560,6 +565,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                         <TabsTrigger value="detect">Tamper</TabsTrigger>
                                         <TabsTrigger value="metadata">Meta</TabsTrigger>
                                         <TabsTrigger value="face">Face</TabsTrigger>
+                                        <TabsTrigger value="weapon">Weapon</TabsTrigger>
                                     </>
                                 )}
                             </TabsList>
@@ -780,6 +786,15 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                     <FaceAnalysis preselectedEvidenceId={evidenceId} isEmbedded={true} />
                                 </div>
                             </TabsContent>
+
+                            {/* Tab Content: Weapon */}
+                            {!evidence.type?.startsWith('video/') && (
+                                <TabsContent value="weapon" className="mt-0 h-full">
+                                    <div className="p-4">
+                                        <WeaponDetection preselectedEvidenceId={evidenceId} isEmbedded={true} />
+                                    </div>
+                                </TabsContent>
+                            )}
                         </div>
                     </Tabs>
                 </div>

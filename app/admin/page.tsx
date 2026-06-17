@@ -46,6 +46,29 @@ export default function AdminPage() {
   const [viewingEvidenceId, setViewingEvidenceId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState<string>("");
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const timeStr = now.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+      setCurrentTime(`${dateStr} | ${timeStr}`);
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Clear chat badge immediately when Chats tab is opened
   const handleSetActiveTab = (tab: typeof activeTab) => {
@@ -287,6 +310,12 @@ export default function AdminPage() {
                  activeTab === 'evidence-detail' ? 'Detailed forensic visualization' :
                  activeTab === 'chats' ? 'Chat with your team' : 'Profile and preferences'}
               </p>
+              {activeTab === 'overview' && currentTime && (
+                <p className="text-[10px] font-mono text-muted-foreground/80 mt-1 flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {currentTime}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
