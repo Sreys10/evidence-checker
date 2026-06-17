@@ -31,6 +31,7 @@ export interface StoredEvidence {
   ipfsHash?: string | null;
   reportGenerated?: boolean;
   faceDetection?: any;
+  weaponDetection?: any;
   id?: string; // For backward compatibility
 }
 
