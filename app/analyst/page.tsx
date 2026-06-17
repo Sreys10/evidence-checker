@@ -275,14 +275,12 @@ export default function AnalystPage() {
         {/* Sidebar Header */}
         <div className="h-16 flex items-center justify-center border-b border-border">
           {sidebarCollapsed ? (
-            <Shield className="h-8 w-8 text-primary" />
+            <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain shrink-0" />
           ) : (
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Shield className="h-5 w-5 text-primary" />
-              </div>
+              <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain shrink-0" />
               <div>
-                <h1 className="font-bold text-lg leading-none">EviCheck</h1>
+                <h1 className="font-bold text-lg leading-none text-foreground">EviCheck</h1>
                 <p className="text-[10px] text-muted-foreground">Analyst Portal</p>
               </div>
             </div>
@@ -375,11 +373,14 @@ export default function AnalystPage() {
       <div className="flex-1 flex flex-col min-w-0 bg-background/95 backdrop-blur-sm">
         {/* Mobile Header */}
         <header className="h-16 border-b border-border flex items-center justify-between px-4 lg:hidden bg-card z-20">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => setIsMobileSidebarOpen(true)}>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setIsMobileSidebarOpen(true)}>
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="font-semibold">EviCheck Analyst</span>
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="Logo" className="h-5 w-5 object-contain" />
+              <span className="font-semibold text-sm text-foreground">EviCheck Analyst</span>
+            </div>
           </div>
           <ThemeToggle />
         </header>
@@ -761,10 +762,8 @@ export default function AnalystPage() {
           <div className="flex flex-col h-full">
             <div className="p-4 border-b border-border bg-muted/20">
               <div className="flex items-center gap-2 mb-4">
-                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-primary" />
-                </div>
-                <span className="font-bold text-lg">EviCheck</span>
+                <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain shrink-0" />
+                <span className="font-bold text-lg text-foreground">EviCheck</span>
               </div>
               <div className="flex items-center gap-3">
                 <Avatar className="h-9 w-9 ring-2 ring-primary/20">

@@ -53,9 +53,7 @@ export default function AdminSidebar({
         {/* Brand */}
         <div className={`flex items-center h-16 px-4 border-b border-border gap-2 ${sidebarCollapsed ? 'justify-center px-2' : ''}`}>
           {!sidebarCollapsed && <>
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shrink-0">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
+            <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="font-bold text-sm text-foreground">EviCheck</p>
               <Badge className="text-[9px] h-4 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 border px-1.5">Admin Portal</Badge>
@@ -65,9 +63,7 @@ export default function AdminSidebar({
             </Button>
           </>}
           {sidebarCollapsed && <>
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
+            <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain shrink-0" />
           </>}
         </div>
 
