@@ -13,6 +13,10 @@ const IMAGE_STORAGE_ABI = [
 const CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_IMAGE_STORAGE_ADDRESS || "0xNotDeployedYet";
 
+// Hardhat local chain ID (31337 decimal = 0x7a69 hex)
+const HARDHAT_CHAIN_ID = "0x7a69";
+const HARDHAT_CHAIN_ID_DECIMAL = 31337n;
+
 declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,19 +24,92 @@ declare global {
   }
 }
 
-/** Requests MetaMask account access and returns the connected address. */
+/**
+ * Forces MetaMask to switch to the local Hardhat network.
+ * Adds the network automatically if it's not yet configured.
+ * Must be called before any transaction is sent.
+ */
+async function ensureHardhatNetwork(): Promise<void> {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
+    throw new Error("MetaMask is not installed!");
+  }
+
+  try {
+    // Try switching to Hardhat Localhost
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: HARDHAT_CHAIN_ID }],
+    });
+  } catch (switchError: any) {
+    if (switchError.code === 4902 || switchError.code === -32603) {
+      // Chain not added yet — add it automatically
+      try {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: HARDHAT_CHAIN_ID,
+              chainName: "Hardhat Localhost",
+              rpcUrls: ["http://127.0.0.1:8545"],
+              nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+            },
+          ],
+        });
+        // Retry the switch after adding
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: HARDHAT_CHAIN_ID }],
+        });
+      } catch (addError: any) {
+        throw new Error(
+          "Could not add Hardhat Localhost network to MetaMask. " +
+          "Please add it manually: RPC http://127.0.0.1:8545, Chain ID 31337."
+        );
+      }
+    } else if (switchError.code === 4001) {
+      // User rejected the switch
+      throw new Error(
+        "You rejected the network switch. Please switch MetaMask to 'Hardhat Localhost' (Chain ID 31337) and try again."
+      );
+    } else {
+      throw switchError;
+    }
+  }
+
+  // Final safety check — verify we're actually on Hardhat now
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const network = await provider.getNetwork();
+  if (network.chainId !== HARDHAT_CHAIN_ID_DECIMAL) {
+    throw new Error(
+      `Wrong network detected (Chain ID: ${network.chainId}). ` +
+      "Please switch MetaMask to 'Hardhat Localhost' (Chain ID 31337) and try again."
+    );
+  }
+}
+
+/** Requests MetaMask account access, switches to Hardhat, and returns the connected address. */
 export async function connectWallet(): Promise<string> {
   if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
     throw new Error("MetaMask is not installed!");
   }
 
+  // 1. Request account access
   const provider = new ethers.BrowserProvider(window.ethereum);
   const accounts: string[] = await provider.send("eth_requestAccounts", []);
+
+  if (!accounts || accounts.length === 0) {
+    throw new Error("No accounts connected.");
+  }
+
+  // 2. Always enforce Hardhat Localhost network
+  await ensureHardhatNetwork();
+
   return accounts[0];
 }
 
 /**
  * Stores enriched evidence data on the ImageStorage smart contract.
+ * Always forces a network switch to Hardhat Localhost before sending.
  */
 export async function storeEvidenceOnBlockchain(
   ipfsHash: string,
@@ -45,8 +122,11 @@ export async function storeEvidenceOnBlockchain(
   }
 
   if (CONTRACT_ADDRESS === "0xNotDeployedYet") {
-    throw new Error("ImageStorage contract not deployed.");
+    throw new Error("ImageStorage contract not deployed. Run: npx hardhat run scripts/deploy.js --network localhost");
   }
+
+  // ⚡ Always switch to Hardhat BEFORE sending the transaction
+  await ensureHardhatNetwork();
 
   const provider = new ethers.BrowserProvider(window.ethereum);
   const signer = await provider.getSigner();
@@ -80,6 +160,7 @@ export async function storeHashOnBlockchain(
  */
 export async function getEvidenceFromBlockchain(
   userAddress: string
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
   if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
     throw new Error("MetaMask is not installed!");
@@ -90,7 +171,9 @@ export async function getEvidenceFromBlockchain(
   const provider = new ethers.BrowserProvider(window.ethereum);
   const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const records = await contract.getEvidence(userAddress);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return records.map((r: any) => ({
     ipfsHash: r.ipfsHash,
     analystId: r.analystId,

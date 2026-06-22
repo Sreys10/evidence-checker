@@ -36,9 +36,9 @@ import FaceAnalysis from "./face-analysis";
 import WeaponDetection from "./weapon-detection";
 import { motion } from "framer-motion";
 import { uploadToIPFS } from "@/lib/ipfs-service";
-import { connectWallet, storeHashOnBlockchain } from "@/lib/web3-service";
+import { connectWallet, storeEvidenceOnBlockchain } from "@/lib/web3-service";
 import { saveEvidence } from "@/lib/evidence-storage";
-import { Loader2, ShieldCheck, Link as LinkIcon } from "lucide-react";
+import { Loader2, ShieldCheck, Link as LinkIcon, Wallet } from "lucide-react";
 import { downloadReport, type ReportData } from "@/lib/report-generator";
 
 interface EvidenceDetailProps {
@@ -58,6 +58,27 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
     const [isAnalyzingBg, setIsAnalyzingBg] = useState(false);
     const [isSendingToAdmin, setIsSendingToAdmin] = useState(false);
     const [sentToAdmin, setSentToAdmin] = useState(false);
+    
+    // Blockchain integration states
+    const [walletAddress, setWalletAddress] = useState<string | null>(null);
+    const [blockchainStatus, setBlockchainStatus] = useState<string | null>(null);
+    const [blockchainError, setBlockchainError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const checkWallet = async () => {
+            if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts.length > 0) {
+                        setWalletAddress(accounts[0]);
+                    }
+                } catch (e) {
+                    console.error("Error checking wallet connection:", e);
+                }
+            }
+        };
+        checkWallet();
+    }, []);
 
     useEffect(() => {
         if (evidence) {
@@ -353,22 +374,58 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
         return new File([blob], filename, { type: blob.type });
     };
 
+    const handleConnectWallet = async () => {
+        setBlockchainError(null);
+        try {
+            setBlockchainStatus("Connecting to MetaMask...");
+            const account = await connectWallet();
+            setWalletAddress(account);
+            setBlockchainStatus(null);
+        } catch (e: any) {
+            console.error("Wallet connection failed:", e);
+            setBlockchainError(e.message || "Failed to connect wallet.");
+            setBlockchainStatus(null);
+        }
+    };
+
     const handlePreserve = async () => {
         if (!evidence) return;
         setIsPreserving(true);
+        setBlockchainError(null);
         try {
-            // 1. Connect Wallet
-            const account = await connectWallet();
-            if (!account) throw new Error("Wallet connection failed or rejected");
+            // 1. Ensure wallet connected
+            let account = walletAddress;
+            if (!account) {
+                setBlockchainStatus("Connecting wallet...");
+                account = await connectWallet();
+                setWalletAddress(account);
+            }
 
-            // 2. Upload image to local IPFS daemon
+            // 2. Prepare File
+            setBlockchainStatus("Converting evidence secure file...");
             const file = await dataURLtoFile(evidence.imageData, evidence.fileName);
+
+            // 3. Upload to local IPFS node
+            setBlockchainStatus("Pinning payload to IPFS node...");
             const ipfsHash = await uploadToIPFS(file);
 
-            // 3. Store IPFS CID on ImageStorage contract
-            const receipt = await storeHashOnBlockchain(ipfsHash);
+            // 4. Store CID and metadata on-chain
+            setBlockchainStatus("Awaiting transaction authorization in wallet...");
+            const userStr = localStorage.getItem('user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const analystId = user?._id || user?.id || "unknown_analyst";
+            const confidenceScore = evidence.confidence || 100;
+            const verdictStr = evidence.result === "tampered" ? "Tampered" : "Authentic";
 
-            // 4. Save to local evidence record
+            const receipt = await storeEvidenceOnBlockchain(
+                ipfsHash,
+                analystId,
+                confidenceScore,
+                verdictStr
+            );
+
+            // 5. Update database and local state
+            setBlockchainStatus("Updating database records...");
             const updates = {
                 ipfsHash,
                 blockchainHash: receipt.hash,
@@ -380,14 +437,12 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                 body: JSON.stringify(updates),
             });
 
-            alert(
-                `Evidence preserved on blockchain!\nIPFS CID: ${ipfsHash}\nTransaction Hash: ${receipt.hash}`
-            );
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            setBlockchainStatus("✅ Preservation confirmed on-chain!");
+            setTimeout(() => setBlockchainStatus(null), 3000);
         } catch (error: any) {
-            console.error("Preservation Error:", error);
-            alert("Preservation failed: " + (error.message || error));
+            console.error("Decentralized Preservation Error:", error);
+            setBlockchainError(error.message || String(error));
+            setBlockchainStatus(null);
         } finally {
             setIsPreserving(false);
         }
@@ -634,6 +689,63 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                             >
                                                 View on Local Hardhat Node <LinkIcon className="h-3 w-3" />
                                             </a>
+                                        </div>
+                                    )}
+
+                                    {!evidence.blockchainHash && evidence.status === 'complete' && (
+                                        <div className="p-4 rounded-lg bg-muted/40 border border-border/50 space-y-3 relative overflow-hidden">
+                                            <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-400 font-semibold text-xs uppercase tracking-wider">
+                                                <Wallet className="h-4 w-4" /> Secure Evidence on Blockchain
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                Securing this evidence will upload and pin its image to decentralized IPFS storage, then log its cryptographic signature, analyst identity, confidence score, and forensic check verdict permanently onto the immutable blockchain ledger.
+                                            </p>
+
+                                            {blockchainError && (
+                                                <div className="text-[11px] text-destructive bg-destructive/10 border border-destructive/20 p-2.5 rounded-lg">
+                                                    ❌ {blockchainError}
+                                                </div>
+                                            )}
+
+                                            {isPreserving ? (
+                                                <div className="space-y-2 bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-cyan-500/10 p-3 rounded-lg border border-cyan-500/25 relative overflow-hidden shadow-sm">
+                                                    <motion.div 
+                                                        className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/15 to-transparent -skew-x-12"
+                                                        animate={{ x: ['-100%', '200%'] }}
+                                                        transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                                                    />
+                                                    <div className="flex items-center gap-2.5 text-[11px] text-foreground relative z-10 font-mono">
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-500" />
+                                                        <span>{blockchainStatus || "Securing..."}</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-2 mt-1">
+                                                    {walletAddress ? (
+                                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-muted/70 p-2.5 rounded-lg border border-border/40 text-xs">
+                                                            <span className="font-mono text-muted-foreground truncate max-w-[180px]">
+                                                                Connected: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                                                            </span>
+                                                            <Button 
+                                                                size="sm" 
+                                                                onClick={handlePreserve}
+                                                                className="h-7 text-[10px] px-3 gap-1 bg-cyan-600 hover:bg-cyan-700 text-white shadow-sm"
+                                                            >
+                                                                <ShieldCheck className="h-3.5 w-3.5" /> Secure Now
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            onClick={handleConnectWallet}
+                                                            className="w-full h-8 text-[11px] gap-1.5 border-cyan-500/30 text-cyan-600 hover:bg-cyan-50 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
+                                                        >
+                                                            <Wallet className="h-3.5 w-3.5" /> Connect MetaMask Wallet
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
