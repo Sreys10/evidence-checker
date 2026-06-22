@@ -15,7 +15,7 @@ const CONTRACT_ADDRESS =
 
 // Hardhat local chain ID (31337 decimal = 0x7a69 hex)
 const HARDHAT_CHAIN_ID = "0x7a69";
-const HARDHAT_CHAIN_ID_DECIMAL = 31337n;
+const HARDHAT_CHAIN_ID_DECIMAL = BigInt(31337);
 
 declare global {
   interface Window {
@@ -160,8 +160,7 @@ export async function storeHashOnBlockchain(
  */
 export async function getEvidenceFromBlockchain(
   userAddress: string
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any[]> {
+): Promise<any[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
     throw new Error("MetaMask is not installed!");
   }
@@ -171,10 +170,8 @@ export async function getEvidenceFromBlockchain(
   const provider = new ethers.BrowserProvider(window.ethereum);
   const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const records = await contract.getEvidence(userAddress);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return records.map((r: any) => ({
+  return records.map((r: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
     ipfsHash: r.ipfsHash,
     analystId: r.analystId,
     confidenceScore: Number(r.confidenceScore),
