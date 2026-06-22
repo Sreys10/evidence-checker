@@ -67,6 +67,16 @@ interface Report {
       face_image_base64: string;
     }>;
   };
+  weaponDetection?: {
+    weaponsFound: boolean;
+    weaponsDetected: string[];
+    detections: Array<{
+      class: string;
+      confidence: number;
+      bbox: { x: number; y: number; width: number; height: number };
+    }>;
+    totalDetections: number;
+  };
   generatedBy?: {
     name: string;
     email: string;
@@ -207,6 +217,7 @@ export default function ReportGeneration() {
         anomalies: evidenceData.anomalies,
         aiDetection: evidenceData.aiDetection,
         faceDetection: evidenceData.faceDetection,
+        weaponDetection: evidenceData.weaponDetection,
         generatedBy: {
           name: currentUser.name,
           email: currentUser.email,
@@ -240,6 +251,8 @@ export default function ReportGeneration() {
       metadata: report.metadata,
       anomalies: report.anomalies,
       aiDetection: report.aiDetection,
+      faceDetection: report.faceDetection,
+      weaponDetection: report.weaponDetection,
     };
 
     downloadReport(reportData, report.format === "PDF" ? "PDF" : "HTML");
@@ -264,6 +277,8 @@ export default function ReportGeneration() {
       metadata: report.metadata,
       anomalies: report.anomalies,
       aiDetection: report.aiDetection,
+      faceDetection: report.faceDetection,
+      weaponDetection: report.weaponDetection,
     };
 
     downloadReport(reportData, "PDF");
@@ -296,6 +311,9 @@ export default function ReportGeneration() {
         confidence: report.confidence,
         metadata: report.metadata,
         anomalies: report.anomalies,
+        aiDetection: report.aiDetection,
+        faceDetection: report.faceDetection,
+        weaponDetection: report.weaponDetection,
       };
 
       const notification = {

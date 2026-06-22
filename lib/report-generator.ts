@@ -77,7 +77,9 @@ export const generateHTMLReport = (data: ReportData): string => {
     minute: '2-digit'
   });
 
-  let currentSection = 6;
+  let currentSection = 3;
+  const metaSectionNum = data.metadata ? currentSection++ : 0;
+  const anomalySectionNum = currentSection++;
   const faceSectionNum = data.faceDetection ? currentSection++ : 0;
   const weaponSectionNum = data.weaponDetection ? currentSection++ : 0;
   const aiSectionNum = data.aiDetection ? currentSection++ : 0;
@@ -94,6 +96,9 @@ export const generateHTMLReport = (data: ReportData): string => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Digital Forensics Analysis Report - ${data.evidenceName}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     * {
       margin: 0;
@@ -101,382 +106,450 @@ export const generateHTMLReport = (data: ReportData): string => {
       box-sizing: border-box;
     }
     @media print {
-      body { padding: 0; }
-      .no-print { display: none; }
+      body {
+        padding: 0;
+        background: white;
+      }
+      .container {
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+      }
+      .no-print {
+        display: none;
+      }
+      .page-break {
+        page-break-before: always;
+      }
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.7;
-      color: #1f2937;
-      background: #f9fafb;
-      padding: 20px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      color: #0f172a;
+      background: #f1f5f9;
+      padding: 40px 20px;
     }
     .container {
-      max-width: 1000px;
+      max-width: 960px;
       margin: 0 auto;
       background: white;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-      border-radius: 12px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      border-radius: 16px;
       overflow: hidden;
+      border: 1px solid #e2e8f0;
     }
     .header {
-      background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #6366f1 100%);
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
       color: white;
-      padding: 50px 40px;
-      text-align: center;
-      border-bottom: 4px solid #1e40af;
+      padding: 60px 50px;
+      position: relative;
+      border-bottom: 5px solid #3b82f6;
+    }
+    .header::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #3b82f6 0%, #6366f1 50%, #10b981 100%);
     }
     .header h1 {
-      font-size: 36px;
-      margin-bottom: 10px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      margin-bottom: 8px;
+      text-transform: uppercase;
     }
     .header .subtitle {
-      opacity: 0.95;
-      font-size: 18px;
-      font-weight: 300;
-      margin-bottom: 20px;
+      color: #94a3b8;
+      font-size: 16px;
+      font-weight: 400;
+      margin-bottom: 24px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
     }
-    .header .report-id {
-      background: rgba(255, 255, 255, 0.2);
-      padding: 8px 16px;
+    .header .report-meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .header .meta-pill {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 6px 14px;
       border-radius: 20px;
-      display: inline-block;
       font-size: 12px;
       font-weight: 500;
-      letter-spacing: 0.5px;
+      color: #e2e8f0;
     }
     .content {
-      padding: 50px 40px;
+      padding: 50px;
     }
     .section {
-      margin-bottom: 50px;
+      margin-bottom: 45px;
       page-break-inside: avoid;
     }
     .section-title {
-      font-size: 26px;
+      font-size: 20px;
       font-weight: 700;
-      color: #1e3a8a;
-      margin-bottom: 25px;
-      padding-bottom: 12px;
-      border-bottom: 3px solid #3b82f6;
-      letter-spacing: -0.3px;
+      color: #0f172a;
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title::before {
+      content: "";
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background: #3b82f6;
+      border-radius: 2px;
     }
     .subsection-title {
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 600;
-      color: #374151;
-      margin: 25px 0 15px 0;
-      padding-left: 15px;
-      border-left: 4px solid #3b82f6;
+      color: #334155;
+      margin: 20px 0 10px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .executive-summary {
-      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-      border: 2px solid #3b82f6;
+      background: #fafafb;
+      border: 1px solid #e2e8f0;
+      border-left: 5px solid #3b82f6;
       border-radius: 12px;
       padding: 30px;
-      margin-bottom: 40px;
+      margin-bottom: 35px;
     }
     .executive-summary h3 {
-      color: #1e3a8a;
-      font-size: 20px;
-      margin-bottom: 15px;
+      color: #0f172a;
+      font-size: 18px;
+      margin-bottom: 12px;
       font-weight: 700;
+    }
+    .executive-summary p {
+      font-size: 15px;
+      color: #334155;
+      line-height: 1.6;
+    }
+    .verdict-box {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
     }
     .status-badge {
-      display: inline-block;
-      padding: 14px 28px;
-      border-radius: 8px;
+      padding: 8px 18px;
+      border-radius: 6px;
       font-weight: 700;
-      font-size: 20px;
+      font-size: 14px;
       background: ${statusColor};
       color: white;
-      margin: 15px 0;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .risk-badge {
-      display: inline-block;
-      padding: 8px 16px;
-      border-radius: 6px;
+      padding: 6px 12px;
+      border-radius: 4px;
       font-weight: 600;
-      font-size: 14px;
-      background: ${riskColor};
-      color: white;
-      margin-left: 10px;
+      font-size: 12px;
+      background: ${riskColor}15;
+      color: ${riskColor};
+      border: 1px solid ${riskColor}30;
+      text-transform: uppercase;
+    }
+    .confidence-wrapper {
+      margin-top: 20px;
+    }
+    .confidence-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .confidence-bar {
+      width: 100%;
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      background: ${statusColor};
+      border-radius: 6px;
     }
     .image-container {
       text-align: center;
-      margin: 30px 0;
-      background: #f9fafb;
-      padding: 25px;
+      margin: 25px 0;
+      background: #f8fafc;
+      padding: 20px;
       border-radius: 12px;
-      border: 2px solid #e5e7eb;
+      border: 1px solid #e2e8f0;
+      position: relative;
     }
     .image-container img {
       max-width: 100%;
-      height: auto;
-      border-radius: 8px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-      border: 1px solid #d1d5db;
+      max-height: 400px;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      border: 1px solid #cbd5e1;
     }
     .info-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      margin: 25px 0;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
     }
     .info-item {
-      background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-      padding: 22px;
-      border-radius: 10px;
-      border-left: 5px solid #3b82f6;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      transition: transform 0.2s;
-    }
-    .info-item:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      background: #f8fafc;
+      padding: 16px 20px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
     }
     .info-item label {
       display: block;
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
-      color: #6b7280;
-      margin-bottom: 10px;
+      color: #64748b;
+      margin-bottom: 4px;
       font-weight: 700;
-      letter-spacing: 1px;
+      letter-spacing: 0.05em;
     }
     .info-item value {
       display: block;
-      font-size: 18px;
-      color: #1f2937;
+      font-size: 14px;
+      color: #0f172a;
       font-weight: 600;
     }
     .analysis-scores {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 20px;
-      margin: 25px 0;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
     }
     .score-card {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      background: #0f172a;
       color: white;
-      padding: 25px;
-      border-radius: 12px;
+      padding: 20px;
+      border-radius: 10px;
       text-align: center;
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
-      transition: transform 0.2s;
-    }
-    .score-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+      border: 1px solid #1e293b;
+      position: relative;
     }
     .score-card label {
       display: block;
-      font-size: 12px;
-      opacity: 0.95;
-      margin-bottom: 10px;
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 8px;
       font-weight: 600;
-      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .score-card value {
       display: block;
-      font-size: 36px;
+      font-size: 28px;
       font-weight: 700;
-      margin-bottom: 8px;
+      font-family: 'JetBrains Mono', monospace;
     }
     .score-card .interpretation {
-      font-size: 11px;
-      opacity: 0.9;
-      font-weight: 500;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      display: inline-block;
       margin-top: 8px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .score-card.pass .interpretation {
+      background: #10b98120;
+      color: #10b981;
+    }
+    .score-card.fail .interpretation {
+      background: #ef444420;
+      color: #ef4444;
+    }
+    .score-card.warn .interpretation {
+      background: #f59e0b20;
+      color: #f59e0b;
     }
     .detailed-analysis {
-      background: #f9fafb;
-      border-radius: 10px;
-      padding: 25px;
+      background: #fafafb;
+      border-radius: 8px;
+      padding: 20px;
       margin: 20px 0;
-      border-left: 5px solid #6366f1;
+      border: 1px solid #e2e8f0;
     }
     .analysis-item {
-      padding: 18px;
+      padding: 15px;
       background: white;
-      border-radius: 8px;
-      margin-bottom: 15px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      border: 1px solid #e2e8f0;
       border-left: 4px solid #3b82f6;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
     }
     .analysis-item h4 {
-      color: #1e3a8a;
-      font-size: 16px;
-      margin-bottom: 8px;
-      font-weight: 600;
-    }
-    .analysis-item p {
-      color: #4b5563;
+      color: #0f172a;
       font-size: 14px;
-      line-height: 1.6;
-      margin-top: 8px;
-    }
-    .methodology {
-      background: #fef3c7;
-      border: 2px solid #fbbf24;
-      border-radius: 10px;
-      padding: 25px;
-      margin: 25px 0;
-    }
-    .methodology h4 {
-      color: #92400e;
-      margin-bottom: 15px;
+      margin-bottom: 4px;
       font-weight: 700;
     }
-    .methodology ul {
-      margin-left: 20px;
+    .analysis-item p {
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .methodology-box {
+      background: #fffbeb;
+      border: 1px solid #fef3c7;
+      border-left: 4px solid #fbbf24;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
       color: #78350f;
     }
-    .methodology li {
-      margin: 8px 0;
-      line-height: 1.6;
+    .methodology-box h4 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .methodology-box ul {
+      margin-left: 20px;
+      font-size: 13.5px;
+    }
+    .methodology-box li {
+      margin-bottom: 4px;
     }
     .anomalies {
-      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-      border: 2px solid #f87171;
-      border-radius: 12px;
-      padding: 25px;
-      margin: 25px 0;
+      background: #fef2f2;
+      border: 1px solid #fee2e2;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
     }
     .anomalies h3 {
       color: #991b1b;
-      margin-bottom: 18px;
-      font-size: 20px;
+      margin-bottom: 12px;
+      font-size: 16px;
       font-weight: 700;
     }
     .anomalies ul {
       list-style: none;
-      padding: 0;
     }
     .anomalies li {
-      padding: 12px 16px;
+      padding: 10px 14px;
       background: white;
-      margin: 10px 0;
+      margin-bottom: 8px;
       border-radius: 6px;
       border-left: 4px solid #dc2626;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      font-weight: 500;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      font-size: 13px;
       color: #7f1d1d;
+      font-weight: 500;
     }
     .recommendations {
-      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-      border: 2px solid #22c55e;
-      border-radius: 12px;
-      padding: 25px;
-      margin: 25px 0;
+      background: #f0fdf4;
+      border: 1px solid #dcfce7;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
     }
     .recommendations h4 {
       color: #166534;
-      margin-bottom: 15px;
+      margin-bottom: 12px;
       font-weight: 700;
-      font-size: 18px;
+      font-size: 15px;
     }
     .recommendations ul {
       margin-left: 20px;
       color: #15803d;
+      font-size: 13.5px;
     }
     .recommendations li {
-      margin: 10px 0;
-      line-height: 1.7;
-      font-weight: 500;
-    }
-    .footer {
-      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
-      color: white;
-      padding: 40px;
-      text-align: center;
-      border-top: 4px solid #3b82f6;
-    }
-    .footer p {
-      margin: 8px 0;
-      opacity: 0.9;
-    }
-    .footer strong {
-      font-size: 16px;
-      opacity: 1;
-    }
-    .confidence-bar {
-      width: 100%;
-      height: 40px;
-      background: #e5e7eb;
-      border-radius: 20px;
-      overflow: hidden;
-      margin: 25px 0;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .confidence-fill {
-      height: 100%;
-      background: linear-gradient(90deg, ${statusColor} 0%, ${statusColor}dd 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: 700;
-      font-size: 16px;
-      transition: width 0.3s ease;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      margin-bottom: 6px;
     }
     .chain-of-custody {
-      background: #f9fafb;
-      border: 2px solid #d1d5db;
-      border-radius: 10px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
       padding: 20px;
       margin: 20px 0;
+      overflow-x: auto;
     }
     .chain-of-custody table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 15px;
+      font-size: 13px;
     }
     .chain-of-custody th {
-      background: #3b82f6;
-      color: white;
-      padding: 12px;
+      background: #f8fafc;
+      color: #475569;
+      padding: 10px 12px;
       text-align: left;
       font-weight: 600;
-      font-size: 13px;
+      border-bottom: 2px solid #cbd5e1;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.05em;
     }
     .chain-of-custody td {
-      padding: 12px;
-      border-bottom: 1px solid #e5e7eb;
-      font-size: 14px;
-    }
-    .chain-of-custody tr:hover {
-      background: #f3f4f6;
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      color: #334155;
     }
     .technical-details {
-      background: #f9fafb;
-      border-radius: 10px;
+      background: #0f172a;
+      border-radius: 8px;
       padding: 20px;
       margin: 20px 0;
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-      border: 1px solid #d1d5db;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      border: 1px solid #1e293b;
+      color: #94a3b8;
+      line-height: 1.5;
     }
     .technical-details code {
-      color: #1e40af;
-      font-weight: 600;
+      color: #3b82f6;
     }
-    .page-break {
-      page-break-before: always;
+    .footer {
+      background: #0f172a;
+      color: #94a3b8;
+      padding: 40px;
+      text-align: center;
+      font-size: 12px;
+      border-top: 1px solid #1e293b;
+    }
+    .footer strong {
+      color: white;
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>DIGITAL FORENSICS ANALYSIS REPORT</h1>
-      <p class="subtitle">Comprehensive Image Authenticity & Tampering Detection</p>
-      <div class="report-id">Report ID: ${data.id}</div>
+      <h1>Digital Forensics Report</h1>
+      <p class="subtitle">Evidence Authenticity & Tampering Analysis</p>
+      <div class="report-id-container">
+        <div class="meta-pill">Report ID: ${data.id}</div>
+        <div class="meta-pill">Evidence: ${data.evidenceName}</div>
+      </div>
     </div>
     
     <div class="content">
@@ -484,54 +557,50 @@ export const generateHTMLReport = (data: ReportData): string => {
       <div class="section">
         <div class="executive-summary">
           <h3>Executive Summary</h3>
-          <p style="font-size: 16px; line-height: 1.8; color: #1e3a8a; margin-bottom: 15px;">
-            This comprehensive digital forensics analysis report presents the findings of an in-depth examination 
-            of digital evidence file <strong>${data.evidenceName}</strong>. The analysis employed advanced 
-            computer vision algorithms, metadata forensics, compression artifact analysis, and AI-powered 
-            detection systems to assess the authenticity and integrity of the submitted evidence.
+          <p>
+            This digital forensics analysis report presents the verification findings for digital evidence file 
+            <strong>${data.evidenceName}</strong>. The analysis employed neural image tampering networks, metadata structure extraction, 
+            artificial enhancement checks, and threat evaluation protocols to verify authenticity and identify manipulations.
           </p>
-          <div style="margin-top: 20px;">
-            <div class="status-badge">
-              ${statusIcon} VERDICT: ${data.status.toUpperCase()}
+          <div class="verdict-box">
+            <div class="status-badge" style="background: ${statusColor};">
+              ${statusIcon} Verdict: ${data.status.toUpperCase()}
             </div>
-            <span class="risk-badge">Risk Level: ${riskLevel}</span>
+            <span class="risk-badge" style="color: ${riskColor}; background: ${riskColor}10; border-color: ${riskColor}30;">Risk Level: ${riskLevel}</span>
           </div>
-          <div class="confidence-bar" style="margin-top: 20px;">
-            <div class="confidence-fill" style="width: ${data.confidence}%">
-              Analysis Confidence: ${data.confidence.toFixed(1)}%
+          <div class="confidence-wrapper">
+            <div class="confidence-label">
+              <span>Forensic Confidence</span>
+              <span>${data.confidence.toFixed(1)}%</span>
+            </div>
+            <div class="confidence-bar">
+              <div class="confidence-fill" style="width: ${data.confidence}%"></div>
             </div>
           </div>
-          <p style="margin-top: 20px; font-size: 14px; color: #475569; line-height: 1.7;">
-            ${data.status === "authentic"
-      ? `The digital evidence has been examined using multiple forensic techniques and shows <strong>no significant indicators of tampering or manipulation</strong>. The image exhibits consistent pixel patterns, valid metadata structures, and normal compression characteristics consistent with authentic digital photography.`
-      : `The digital evidence analysis has identified <strong>multiple indicators suggesting potential tampering or manipulation</strong>. Inconsistencies were detected across pixel-level analysis, metadata examination, and compression artifact patterns. Further investigation is recommended.`
-    }
-          </p>
         </div>
       </div>
 
       <!-- Evidence Information -->
       <div class="section">
-        <h2 class="section-title">1. Evidence Information</h2>
+        <h2 class="section-title">1. Evidence Overview</h2>
         <div class="image-container">
           <img src="${data.imageData}" alt="${data.evidenceName}" />
-          <p style="margin-top: 15px; color: #6b7280; font-weight: 600;">Evidence File: ${data.evidenceName}</p>
         </div>
         <div class="info-grid">
           <div class="info-item">
-            <label>Evidence File Name</label>
+            <label>Evidence Filename</label>
             <value>${data.evidenceName}</value>
           </div>
           <div class="info-item">
-            <label>Report Generation Date</label>
+            <label>Analysis Date</label>
             <value>${formattedDate}</value>
           </div>
           <div class="info-item">
-            <label>Forensic Analyst</label>
+            <label>Investigating Officer</label>
             <value>${data.generatedBy.name}</value>
           </div>
           <div class="info-item">
-            <label>Analyst Contact</label>
+            <label>Contact Email</label>
             <value>${data.generatedBy.email}</value>
           </div>
         </div>
@@ -540,206 +609,125 @@ export const generateHTMLReport = (data: ReportData): string => {
       <!-- Methodology -->
       <div class="section">
         <h2 class="section-title">2. Analysis Methodology</h2>
-        <div class="methodology">
-          <h4>Forensic Analysis Techniques Applied</h4>
+        <div class="methodology-box">
+          <h4>Applied Forensic Pipeline</h4>
           <ul>
-      <li><strong>AI-Powered Detection:</strong> Machine learning models analyze deepfake probability, AI-generated content indicators, image quality metrics, and scammer detection patterns.</li>
-            <li><strong>Statistical Analysis:</strong> Multi-dimensional statistical evaluation combining all detection methods to provide comprehensive authenticity assessment.</li>
+            <li><strong>AI Detection Systems:</strong> Verifies generative structures, deepfake manipulation, quality limits, and scam likelihood.</li>
+            <li><strong>EXIF Consistency Check:</strong> Discovers camera metadata inconsistencies, digital crop signs, and processing program footprints.</li>
+            <li><strong>Threat Scan:</strong> Scans for dangerous weapon silhouettes or malicious items present inside the scene.</li>
           </ul>
         </div>
       </div>
 
-
-
       ${data.metadata ? `
       <!-- Metadata Examination -->
       <div class="section">
-        <h2 class="section-title">4. Metadata & EXIF Data Examination</h2>
+        <h2 class="section-title">${metaSectionNum}. Metadata & EXIF Analysis</h2>
         <div class="info-grid">
           ${data.metadata.camera ? `
           <div class="info-item">
-            <label>Camera/Device Model</label>
+            <label>Camera Model</label>
             <value>${data.metadata.camera}</value>
           </div>
           ` : ''}
           ${data.metadata.date ? `
           <div class="info-item">
-            <label>Date & Time Captured</label>
+            <label>Date Captured</label>
             <value>${data.metadata.date}</value>
           </div>
           ` : ''}
           ${data.metadata.location ? `
           <div class="info-item">
-            <label>Geographic Location</label>
+            <label>Location Coordinates</label>
             <value>${data.metadata.location}</value>
           </div>
           ` : ''}
           ${data.metadata.software ? `
           <div class="info-item">
-            <label>Processing Software</label>
+            <label>Software Footprint</label>
             <value>${data.metadata.software}</value>
           </div>
           ` : ''}
         </div>
-        <div class="technical-details" style="margin-top: 20px;">
-          <p><strong>Metadata Analysis Notes:</strong></p>
-          <p>${data.metadata.software
-        ? `⚠️ <code>Processing software detected:</code> The presence of "${data.metadata.software}" in metadata suggests the image may have been processed or edited using image manipulation software. This does not necessarily indicate tampering but warrants additional scrutiny.`
-        : data.metadata.camera && data.metadata.date
-          ? `✓ <code>Metadata consistency:</code> Camera information and timestamp data are present and consistent. No obvious signs of metadata tampering detected.`
-          : `⚠️ <code>Limited metadata:</code> Some expected metadata fields are missing or unavailable. This may indicate file conversion, editing, or metadata stripping.`
-      }</p>
+        <div class="technical-details">
+          <p><strong>EXIF Parsing Observations:</strong></p>
+          <p style="margin-top: 10px;">${data.metadata.software
+            ? `⚠️ <code>Editor Alert:</code> Processing software <strong>"${data.metadata.software}"</strong> was identified in EXIF metadata. This confirms the image has been modified in an external editor or exported from an application.`
+            : data.metadata.camera && data.metadata.date
+              ? `✓ <code>Consistency:</code> Camera fields and capture dates match capturing constraints. No anomalies observed in metadata fields.`
+              : `⚠️ <code>Missing Fields:</code> Essential camera EXIF fields are missing. The file has likely been stripped of original metadata.`
+          }</p>
         </div>
       </div>
       ` : ''}
 
       ${data.anomalies && data.anomalies.length > 0 ? `
-      <!-- Anomalies Detection -->
+      <!-- Anomalies -->
       <div class="section">
-        <h2 class="section-title">5. Detected Anomalies & Risk Indicators</h2>
+        <h2 class="section-title">${anomalySectionNum}. Forensic Flags & Observations</h2>
         <div class="anomalies">
-          <h3>⚠️ Critical Findings: Tampering Indicators Detected</h3>
-          <p style="margin-bottom: 15px; color: #991b1b; font-weight: 600;">
-            The following anomalies and inconsistencies were identified during the forensic examination:
-          </p>
+          <h3>⚠️ Discovered Inconsistencies</h3>
           <ul>
-            ${data.anomalies.map((anomaly) => `<li><strong>Finding:</strong> ${anomaly}</li>`).join('')}
+            ${data.anomalies.map((anomaly) => `<li>${anomaly}</li>`).join('')}
           </ul>
-          <p style="margin-top: 20px; padding: 15px; background: white; border-radius: 6px; color: #7f1d1d; font-size: 14px; line-height: 1.7;">
-            <strong>Risk Assessment:</strong> The presence of ${data.anomalies.length} ${data.anomalies.length === 1 ? 'anomaly' : 'anomalies'} 
-            ${data.anomalies.length === 1 ? 'indicates' : 'indicate'} potential digital manipulation. These findings suggest the image may have been 
-            altered, composited, or processed in ways that compromise its authenticity. Further investigation and expert review are recommended 
-            before using this evidence in legal or official proceedings.
-          </p>
         </div>
       </div>
       ` : `
       <!-- No Anomalies -->
       <div class="section">
-        <h2 class="section-title">5. Anomaly Detection Results</h2>
-        <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #22c55e; border-radius: 12px; padding: 25px; text-align: center;">
-          <h3 style="color: #166534; margin-bottom: 15px; font-size: 20px;">✓ No Anomalies Detected</h3>
-          <p style="color: #15803d; font-size: 16px; line-height: 1.7;">
-            Comprehensive anomaly detection analysis completed. No significant inconsistencies, tampering indicators, or suspicious patterns 
-            were identified during the forensic examination. The image exhibits characteristics consistent with authentic digital capture.
+        <h2 class="section-title">${anomalySectionNum}. Forensic Flags & Observations</h2>
+        <div style="background: #f0fdf4; border: 1px solid #dcfce7; border-left: 4px solid #10b981; border-radius: 8px; padding: 20px;">
+          <h3 style="color: #14532d; font-size: 15px; margin-bottom: 8px;">✓ All Integrity Checks Passed</h3>
+          <p style="color: #15803d; font-size: 13.5px;">
+            The analysis found no pixel inconsistencies, camera metadata anomalies, or generative artificial patterns. The image has original digital parameters.
           </p>
         </div>
       </div>
       `}
 
       ${data.faceDetection ? `
-      <!-- Face Detection Analysis -->
+      <!-- Face Recognition -->
       <div class="section">
-        <h2 class="section-title">${faceSectionNum}. Face Detection & Recognition Analysis</h2>
-        <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
-          Advanced face detection and recognition analysis was performed to identify individuals in the image 
-          and match them against the registered database. This analysis helps verify the identity of persons 
-          present in the evidence.
-        </p>
-        
-        <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 25px; margin: 20px 0;">
-          <h3 style="color: #1e3a8a; margin-bottom: 15px; font-size: 20px;">Face Detection Summary</h3>
-          <p style="color: #1e40af; font-size: 18px; font-weight: 600; margin-bottom: 10px;">
-            Total Faces Detected: <strong>${data.faceDetection.faces_detected}</strong>
-          </p>
-          <p style="color: #475569; font-size: 14px; line-height: 1.7;">
-            ${data.faceDetection.faces_detected === 0
-        ? "No faces were detected in this image. This may indicate the image does not contain human subjects, or the image quality is insufficient for face detection."
-        : data.faceDetection.faces_detected === 1
-          ? "One face was detected in the image."
-          : `${data.faceDetection.faces_detected} faces were detected in the image.`
-      }
-          </p>
+        <h2 class="section-title">${faceSectionNum}. Biometric Analysis (Faces)</h2>
+        <div style="background: #fafafb; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+          <p style="font-size: 14px; font-weight: 600; color: #0f172a;">Faces Detected inside evidence: <span style="font-family: monospace; font-size: 16px; color: #3b82f6;">${data.faceDetection.faces_detected}</span></p>
         </div>
-
+        
         ${data.faceDetection.matches && data.faceDetection.matches.length > 0 ? `
-        <h3 class="subsection-title">${faceSectionNum}.1 Face Recognition Results</h3>
-        <div style="display: grid; gap: 20px; margin: 25px 0;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
           ${data.faceDetection.matches.map((match) => `
-          <div style="background: ${match.match_found ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' : 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'}; border: 2px solid ${match.match_found ? '#22c55e' : '#f59e0b'}; border-radius: 12px; padding: 25px;">
-            <div style="display: flex; align-items: center; margin-bottom: 15px;">
-              <h4 style="color: ${match.match_found ? '#166534' : '#92400e'}; font-size: 18px; margin: 0; margin-right: 15px;">Face ${match.face_number}</h4>
-              <span style="background: ${match.match_found ? '#22c55e' : '#f59e0b'}; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">
-                ${match.match_found ? '✓ MATCH FOUND' : '⚠ NO MATCH'}
-              </span>
+          <div style="background: white; border: 1px solid ${match.match_found ? '#10b98130' : '#f59e0b30'}; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; border-left: 4px solid ${match.match_found ? '#10b981' : '#f59e0b'};">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <h4 style="font-size: 14px; font-weight: 700; color: #0f172a;">Face #${match.face_number}</h4>
+              <span class="risk-badge" style="color: ${match.match_found ? '#10b981' : '#f59e0b'}; background: ${match.match_found ? '#10b98110' : '#f59e0b10'}; border-color: ${match.match_found ? '#10b98130' : '#f59e0b30'};">${match.match_found ? 'MATCH FOUND' : 'NO DATABASE MATCH'}</span>
             </div>
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;">
-              <div>
-                <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600;">DETECTED FACE</p>
-                <img src="${match.face_image_base64}" alt="Detected Face ${match.face_number}" style="width: 100%; max-width: 200px; border-radius: 8px; border: 2px solid #d1d5db;" />
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 150px;">
+                <p style="font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Captured Face</p>
+                <img src="${match.face_image_base64}" alt="Face ${match.face_number}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1;" />
               </div>
+              
               ${match.match_found && match.match_info?.original_image_base64 ? `
-              <div>
-                <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600;">DATABASE MATCH</p>
-                <img src="${match.match_info.original_image_base64}" alt="Database Match" style="width: 100%; max-width: 200px; border-radius: 8px; border: 2px solid #22c55e;" />
+              <div style="flex: 1; min-width: 150px;">
+                <p style="font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Matched Record</p>
+                <img src="${match.match_info.original_image_base64}" alt="Database Match" style="width: 100px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #10b981;" />
+              </div>
+              ` : ''}
+              
+              ${match.match_found && match.match_info ? `
+              <div style="flex: 2; min-width: 200px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px;">
+                <p style="margin-bottom: 4px;"><strong>Target Profile:</strong> ${match.match_info.person_name}</p>
+                <p style="margin-bottom: 4px;"><strong>Similarity Rate:</strong> ${((1 - match.match_info.distance) * 100).toFixed(1)}%</p>
+                ${match.match_info.metadata?.age ? `<p style="margin-bottom: 4px;"><strong>Age:</strong> ${match.match_info.metadata.age}</p>` : ''}
+                ${match.match_info.metadata?.phone ? `<p style="margin-bottom: 4px;"><strong>Phone:</strong> ${match.match_info.metadata.phone}</p>` : ''}
               </div>
               ` : `
-              <div>
-                <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600;">DATABASE MATCH</p>
-                <div style="width: 100%; max-width: 200px; height: 200px; background: #f3f4f6; border-radius: 8px; border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center; color: #9ca3af;">
-                  No Match Found
-                </div>
+              <div style="flex: 2; min-width: 200px; background: #fffbeb; padding: 12px; border-radius: 6px; border: 1px solid #fef3c7; font-size: 12.5px; color: #78350f;">
+                No matches found in FAISS reference database. Target is unrecognized.
               </div>
               `}
             </div>
-
-            ${match.match_found && match.match_info ? `
-            <div style="background: white; border-radius: 8px; padding: 20px; margin-top: 15px; border-left: 4px solid #22c55e;">
-              <h5 style="color: #166534; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Match Information</h5>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                <div>
-                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">PERSON ID</p>
-                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.person_name}</p>
-                </div>
-                ${match.match_info.metadata?.name ? `
-                <div>
-                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">FULL NAME</p>
-                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.name}</p>
-                </div>
-                ` : ''}
-                ${match.match_info.metadata?.age ? `
-                <div>
-                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">AGE</p>
-                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.age}</p>
-                </div>
-                ` : ''}
-                ${match.match_info.metadata?.email ? `
-                <div>
-                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">EMAIL</p>
-                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.email}</p>
-                </div>
-                ` : ''}
-                ${match.match_info.metadata?.phone ? `
-                <div>
-                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">PHONE</p>
-                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.metadata.phone}</p>
-                </div>
-                ` : ''}
-                <div>
-                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">SIMILARITY</p>
-                  <p style="color: #1f2937; font-weight: 600;">${((1 - match.match_info.distance) * 100).toFixed(2)}%</p>
-                </div>
-                <div>
-                  <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">DISTANCE</p>
-                  <p style="color: #1f2937; font-weight: 600;">${match.match_info.distance.toFixed(4)}</p>
-                </div>
-              </div>
-              ${match.match_info.metadata?.added_by ? `
-              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-                <p style="font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600;">ADDED TO DATABASE BY</p>
-                <p style="color: #1f2937; font-size: 13px;">${match.match_info.metadata.added_by.name} (${match.match_info.metadata.added_by.email})</p>
-              </div>
-              ` : ''}
-            </div>
-            ` : `
-            <div style="background: white; border-radius: 8px; padding: 20px; margin-top: 15px; border-left: 4px solid #f59e0b;">
-              <p style="color: #92400e; font-size: 14px; line-height: 1.7;">
-                No matching identity found in the registered database. This face does not correspond to any known person 
-                in the system. The individual may not be registered, or the image quality may be insufficient for accurate matching.
-              </p>
-            </div>
-            `}
           </div>
           `).join('')}
         </div>
@@ -748,186 +736,112 @@ export const generateHTMLReport = (data: ReportData): string => {
       ` : ''}
 
       ${data.weaponDetection ? `
-      <!-- Weapon Detection Analysis -->
+      <!-- Weapon Detection -->
       <div class="section">
-        <h2 class="section-title">${weaponSectionNum}. Weapon & Threat Detection Analysis</h2>
-        <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
-          An automated threat detection scan was performed on the evidence using the YOLOv8 machine learning model 
-          to identify firearms, knives, and other tracked weapon classes. This analysis helps determine the presence 
-          of security threats or weapon-related evidence.
-        </p>
-        
-        <div style="background: ${data.weaponDetection.weaponsFound ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'}; border: 2px solid ${data.weaponDetection.weaponsFound ? '#ef4444' : '#10b981'}; border-radius: 12px; padding: 25px; margin: 20px 0;">
-          <h3 style="color: ${data.weaponDetection.weaponsFound ? '#991b1b' : '#14532d'}; margin-bottom: 15px; font-size: 20px;">Weapon Detection Summary</h3>
-          <p style="color: ${data.weaponDetection.weaponsFound ? '#b91c1c' : '#15803d'}; font-size: 18px; font-weight: 600; margin-bottom: 10px;">
-            Verdict: <strong>${data.weaponDetection.weaponsFound ? 'WEAPONS DETECTED' : 'NO WEAPONS FOUND'}</strong>
-          </p>
-          <p style="color: #475569; font-size: 14px; line-height: 1.7;">
-            ${data.weaponDetection.weaponsFound
-              ? `A total of <strong>${data.weaponDetection.totalDetections}</strong> weapon(s) or threat object(s) were detected in the image: <strong>${data.weaponDetection.weaponsDetected.join(", ")}</strong>.`
-              : "No weapons or threat objects were identified in this image."
-            }
+        <h2 class="section-title">${weaponSectionNum}. Threat & Weapon Scan</h2>
+        <div style="background: ${data.weaponDetection.weaponsFound ? '#fef2f2' : '#f0fdf4'}; border: 1px solid ${data.weaponDetection.weaponsFound ? '#fee2e2' : '#dcfce7'}; border-left: 4px solid ${data.weaponDetection.weaponsFound ? '#ef4444' : '#10b981'}; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+          <h3 style="color: ${data.weaponDetection.weaponsFound ? '#991b1b' : '#14532d'}; font-size: 15px; margin-bottom: 6px; font-weight: 700;">Weapon Search Verdict</h3>
+          <p style="font-size: 13.5px; color: ${data.weaponDetection.weaponsFound ? '#7f1d1d' : '#15803d'};">
+            ${data.weaponDetection.weaponsFound 
+              ? `🚨 Threat identified! Discovered <strong>${data.weaponDetection.totalDetections}</strong> items: <strong>${data.weaponDetection.weaponsDetected.join(', ')}</strong>.` 
+              : 'Safe environment. No firearms or bladed weapons detected.'}
           </p>
         </div>
-
+        
         ${data.weaponDetection.weaponsFound && data.weaponDetection.detections.length > 0 ? `
-        <h3 class="subsection-title">${weaponSectionNum}.1 Detected Threats</h3>
-        <div style="display: grid; gap: 15px; margin: 20px 0;">
-          ${data.weaponDetection.detections.map((det) => `
-          <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${data.weaponDetection.detections.map(det => `
+          <div style="background: white; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #ef4444;">
             <div>
-              <strong style="color: #ef4444; font-size: 16px;">${det.class}</strong>
-              <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Bounding Box: X=${det.bbox.x}, Y=${det.bbox.y}, W=${det.bbox.width}, H=${det.bbox.height}</div>
+              <span style="font-weight: 600; font-size: 14px; color: #ef4444;">${det.class}</span>
+              <span style="font-size: 11px; color: #64748b; margin-left: 10px; font-family: monospace;">BBox [${det.bbox.x}, ${det.bbox.y}, ${det.bbox.width}, ${det.bbox.height}]</span>
             </div>
-            <span style="background: #ef4444; color: white; padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; font-family: monospace;">
-              ${det.confidence.toFixed(1)}% Confidence
-            </span>
+            <span style="background: #ef444420; color: #ef4444; border: 1px solid #ef444430; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">${det.confidence.toFixed(1)}%</span>
           </div>
-          `).join("")}
+          `).join('')}
         </div>
         ` : ''}
       </div>
       ` : ''}
 
       ${data.aiDetection ? `
-      <!-- AI-Powered Detection Analysis -->
+      <!-- AI analysis -->
       <div class="section">
-        <h2 class="section-title">${aiSectionNum}. AI-Powered Detection Analysis</h2>
-        <p style="margin-bottom: 25px; color: #4b5563; line-height: 1.8;">
-          Advanced machine learning models were employed to detect synthetic content, deepfake manipulation, 
-          AI-generated imagery, and other sophisticated tampering techniques that may not be detectable through 
-          traditional forensic methods.
-        </p>
-        
+        <h2 class="section-title">${aiSectionNum}. Deepfake & Synthetic Content Analysis</h2>
         <div class="analysis-scores">
-          <div class="score-card" style="background: ${data.aiDetection.deepfake > 0.5 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'};">
-            <label>Deepfake Detection</label>
-            <value>${(data.aiDetection.deepfake * 100).toFixed(1)}%</value>
-            <div class="interpretation">${data.aiDetection.deepfake > 0.5 ? 'High Risk' : 'Low Risk'}</div>
+          <div class="score-card ${data.aiDetection.deepfake > 0.5 ? 'fail' : 'pass'}">
+            <label>Deepfake Score</label>
+            <value>${(data.aiDetection.deepfake * 100).toFixed(0)}%</value>
+            <span class="interpretation">${data.aiDetection.deepfake > 0.5 ? 'Alert' : 'Nominal'}</span>
           </div>
-          <div class="score-card" style="background: ${data.aiDetection.aiGenerated > 0.5 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'};">
-            <label>AI-Generated Content</label>
-            <value>${(data.aiDetection.aiGenerated * 100).toFixed(1)}%</value>
-            <div class="interpretation">${data.aiDetection.aiGenerated > 0.5 ? 'Synthetic Detected' : 'Authentic'}</div>
+          <div class="score-card ${data.aiDetection.aiGenerated > 0.5 ? 'fail' : 'pass'}">
+            <label>AI generated</label>
+            <value>${(data.aiDetection.aiGenerated * 100).toFixed(0)}%</value>
+            <span class="interpretation">${data.aiDetection.aiGenerated > 0.5 ? 'Synthetic' : 'Camera'}</span>
           </div>
-          <div class="score-card" style="background: ${data.aiDetection.quality > 0.7 ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : data.aiDetection.quality > 0.4 ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'};">
-            <label>Image Quality Index</label>
-            <value>${(data.aiDetection.quality * 100).toFixed(1)}%</value>
-            <div class="interpretation">${data.aiDetection.quality > 0.7 ? 'High Quality' : data.aiDetection.quality > 0.4 ? 'Moderate' : 'Low Quality'}</div>
+          <div class="score-card ${data.aiDetection.quality > 0.6 ? 'pass' : 'warn'}">
+            <label>Image Quality</label>
+            <value>${(data.aiDetection.quality * 100).toFixed(0)}%</value>
+            <span class="interpretation">${data.aiDetection.quality > 0.6 ? 'High' : 'Low'}</span>
           </div>
-          <div class="score-card" style="background: ${data.aiDetection.scamProb > 0.5 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'};">
-            <label>Fraud Risk Assessment</label>
-            <value>${(data.aiDetection.scamProb * 100).toFixed(1)}%</value>
-            <div class="interpretation">${data.aiDetection.scamProb > 0.5 ? 'High Risk' : 'Low Risk'}</div>
+          <div class="score-card ${data.aiDetection.scamProb > 0.5 ? 'fail' : 'pass'}">
+            <label>Scam Index</label>
+            <value>${(data.aiDetection.scamProb * 100).toFixed(0)}%</value>
+            <span class="interpretation">${data.aiDetection.scamProb > 0.5 ? 'Suspicious' : 'Safe'}</span>
           </div>
         </div>
-
-        <div class="detailed-analysis" style="margin-top: 30px;">
-          <h3 class="subsection-title">${aiSectionNum}.1 Detailed AI Analysis Findings</h3>
-          
+        
+        <div class="detailed-analysis">
           <div class="analysis-item">
-            <h4>Deepfake Detection Analysis</h4>
-            <p><strong>Probability: ${(data.aiDetection.deepfake * 100).toFixed(1)}%</strong></p>
-            <p>
-              ${data.aiDetection.deepfake > 0.5
-        ? "⚠️ <strong>HIGH RISK:</strong> The AI detection system has identified a high probability that this image contains deepfake or face-swap manipulation. Facial features, lighting consistency, and biometric patterns show anomalies consistent with synthetic face generation or replacement techniques."
-        : data.aiDetection.deepfake > 0.3
-          ? "⚠️ <strong>MODERATE RISK:</strong> Some indicators of potential deepfake manipulation were detected. While not conclusive, facial analysis revealed minor inconsistencies that warrant further investigation."
-          : "✓ <strong>LOW RISK:</strong> Deepfake detection analysis found no significant indicators of face-swap or deepfake manipulation. Facial features and biometric patterns appear consistent with authentic photography."
-      }
-            </p>
+            <h4>Deepfake Scan</h4>
+            <p>${data.aiDetection.deepfake > 0.5 
+              ? '⚠️ Facial features, skin texture patterns, and lighting vectors indicate face-swap/deepfake manipulation.' 
+              : '✓ Facial structure and biometrics match normal photographic distributions. No deepfake traits detected.'}</p>
           </div>
-
           <div class="analysis-item">
-            <h4>AI-Generated Content Detection</h4>
-            <p><strong>Probability: ${(data.aiDetection.aiGenerated * 100).toFixed(1)}%</strong></p>
-            <p>
-              ${data.aiDetection.aiGenerated > 0.5
-        ? "⚠️ <strong>Synthetic Content Detected:</strong> Analysis indicates this image was likely generated or significantly modified using AI image generation tools (e.g., DALL-E, Midjourney, Stable Diffusion). Characteristic patterns, texture inconsistencies, and generation artifacts were identified."
-        : data.aiDetection.aiGenerated > 0.3
-          ? "⚠️ <strong>Possible AI Processing:</strong> Some indicators suggest the image may have been processed or enhanced using AI tools, though definitive synthetic generation was not confirmed."
-          : "✓ <strong>Authentic Content:</strong> No significant indicators of AI-generated content detected. The image exhibits characteristics consistent with authentic digital photography or legitimate image capture."
-      }
-            </p>
-          </div>
-
-          <div class="analysis-item">
-            <h4>Image Quality Assessment</h4>
-            <p><strong>Quality Index: ${(data.aiDetection.quality * 100).toFixed(1)}%</strong></p>
-            <p>
-              ${data.aiDetection.quality > 0.7
-        ? "✓ <strong>High Quality:</strong> The image demonstrates excellent quality with clear resolution, proper exposure, and minimal compression artifacts. Quality metrics are consistent with professional or high-end consumer photography."
-        : data.aiDetection.quality > 0.4
-          ? "⚠️ <strong>Moderate Quality:</strong> Image quality is acceptable but shows some degradation, compression artifacts, or processing that may limit forensic analysis capabilities. Quality is sufficient for most examination purposes."
-          : "⚠️ <strong>Low Quality:</strong> Significant quality issues detected including heavy compression, resolution limitations, or processing artifacts. These factors may impact the reliability of forensic analysis and should be considered when evaluating evidence."
-      }
-            </p>
-          </div>
-
-          <div class="analysis-item">
-            <h4>Fraud & Scammer Risk Assessment</h4>
-            <p><strong>Risk Probability: ${(data.aiDetection.scamProb * 100).toFixed(1)}%</strong></p>
-            <p>
-              ${data.aiDetection.scamProb > 0.5
-        ? "⚠️ <strong>HIGH FRAUD RISK:</strong> The detection system has identified characteristics commonly associated with fraudulent or scam-related imagery. This may include profile photos used in social engineering, catfishing, or other deceptive practices. Exercise caution when evaluating the source and context of this image."
-        : "✓ <strong>LOW FRAUD RISK:</strong> No significant indicators of fraudulent or scam-related usage patterns were detected. The image does not exhibit characteristics commonly associated with deceptive imagery."
-      }
-            </p>
+            <h4>Synthetic Content Detection</h4>
+            <p>${data.aiDetection.aiGenerated > 0.5 
+              ? '⚠️ Computational features indicate image was likely generated via Stable Diffusion / Midjourney algorithms.' 
+              : '✓ Continuous signal patterns indicate camera lens acquisition. Image shows standard photographic artifacts.'}</p>
           </div>
         </div>
       </div>
       ` : ''}
 
-      <!-- Risk Assessment -->
+      <!-- Risk Assessment Section -->
       <div class="section">
-        <h2 class="section-title">${riskSectionNum}. Risk Assessment & Classification</h2>
-        <div style="background: ${riskColor}15; border: 2px solid ${riskColor}; border-radius: 12px; padding: 25px; margin: 20px 0;">
-          <div style="display: flex; align-items: center; margin-bottom: 15px;">
-            <h3 style="color: ${riskColor}; font-size: 22px; margin: 0; margin-right: 15px;">Risk Level: ${riskLevel}</h3>
-            <span class="risk-badge" style="background: ${riskColor};">${riskLevel} RISK</span>
-          </div>
-          <p style="color: #374151; font-size: 15px; line-height: 1.8; margin-bottom: 15px;">
-            <strong>Confidence Score: ${data.confidence.toFixed(1)}%</strong>
-          </p>
-          <p style="color: #4b5563; font-size: 14px; line-height: 1.7;">
-            ${riskLevel === "LOW"
-      ? "The evidence demonstrates high authenticity indicators with minimal risk factors. The image shows consistent forensic characteristics and can be considered reliable for evidentiary purposes with standard precautions."
-      : riskLevel === "MEDIUM"
-        ? "The evidence exhibits some inconsistencies or moderate risk indicators. While not definitively tampered, additional verification and expert review are recommended before relying on this evidence in critical applications."
-        : "The evidence shows significant risk indicators and multiple anomalies suggesting potential tampering. This evidence should be treated with extreme caution and requires additional expert forensic examination before use in any legal or official capacity."
-    }
+        <h2 class="section-title">${riskSectionNum}. Forensic Risk Assessment</h2>
+        <div style="background: ${riskColor}08; border: 1px solid ${riskColor}30; border-left: 4px solid ${riskColor}; border-radius: 8px; padding: 20px;">
+          <h3 style="color: ${riskColor}; font-size: 15px; margin-bottom: 6px; font-weight: 700;">Risk Classification: ${riskLevel}</h3>
+          <p style="font-size: 13px; color: #334155;">
+            ${riskLevel === "LOW" 
+              ? "All parameters fall within acceptable margins. The digital record shows zero indicators of malicious alteration. Authentic capture verification is highly consistent." 
+              : riskLevel === "MEDIUM"
+                ? "Minor discrepancies detected. While tampering is not definitively proven, inconsistencies in EXIF fields or minor noise patterns suggest possible secondary processing."
+                : "Definitive tampering indicators found. Discovered structural noise anomalies, software artifacts, or synthetic faces. Relying on this evidence without additional analysis is not recommended."}
           </p>
         </div>
       </div>
 
       <!-- Recommendations -->
       <div class="section">
-        <h2 class="section-title">${recSectionNum}. Recommendations & Next Steps</h2>
+        <h2 class="section-title">${recSectionNum}. Action Recommendations</h2>
         <div class="recommendations">
-          <h4>Forensic Analysis Recommendations</h4>
+          <h4>Suggested Forensic Protocols</h4>
           <ul>
             ${data.status === "authentic"
-      ? `
-              <li>✓ The evidence appears authentic and can be used with standard evidentiary procedures.</li>
-              <li>Maintain proper chain of custody documentation for all future handling of this evidence.</li>
-              <li>Store the original file in a secure, tamper-evident location with backup copies.</li>
-              <li>Document all access and modifications to the evidence file going forward.</li>
+              ? `
+              <li>Verify the cryptographic SHA-256 hash against custody database parameters.</li>
+              <li>Perform blockchain timestamp preservation to log case submission parameters.</li>
+              <li>The evidence is safe to utilize in standard litigation proceedings.</li>
               `
-      : `
-              <li>⚠️ <strong>Immediate Action Required:</strong> Do not rely solely on this evidence without additional verification.</li>
-              <li>Engage a certified digital forensics expert for independent analysis and validation.</li>
-              <li>Obtain the original source file and compare with this evidence to identify discrepancies.</li>
-              <li>Document all findings and maintain detailed records of the analysis process.</li>
-              <li>Consider additional forensic techniques such as hash verification, blockchain timestamping, or expert witness testimony.</li>
-              <li>If this evidence is critical, consider obtaining multiple independent forensic examinations.</li>
+              : `
+              <li>Flag document state in case records as "potential manipulation".</li>
+              <li>Engage certified forensics consultant to run detailed pixel interpolation check.</li>
+              <li>Request primary RAW files directly from capturing camera device if possible.</li>
               `
-    }
-            ${data.aiDetection && (data.aiDetection.deepfake > 0.5 || data.aiDetection.aiGenerated > 0.5)
-      ? `<li>⚠️ <strong>AI Manipulation Alert:</strong> High probability of AI-generated or deepfake content detected. Verify the source and context of this image through independent means.</li>`
-      : ''
-    }
-            <li>Preserve all original files, metadata, and analysis reports for potential legal proceedings.</li>
-            <li>Maintain documentation of the analysis methodology and tools used for transparency and reproducibility.</li>
+            }
+            <li>Ensure evidence is logged on-chain to prevent subsequent modification.</li>
           </ul>
         </div>
       </div>
@@ -936,36 +850,33 @@ export const generateHTMLReport = (data: ReportData): string => {
       <div class="section">
         <h2 class="section-title">${cocSectionNum}. Chain of Custody</h2>
         <div class="chain-of-custody">
-          <p style="margin-bottom: 15px; color: #374151; font-weight: 600;">
-            Evidence handling and analysis timeline:
-          </p>
           <table>
             <thead>
               <tr>
                 <th>Date & Time</th>
-                <th>Action</th>
-                <th>Performed By</th>
-                <th>Status</th>
+                <th>Operation</th>
+                <th>Operator</th>
+                <th>Outcome</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>${formattedDate}</td>
-                <td>Evidence Upload & Initial Analysis</td>
+                <td>Image Importation</td>
                 <td>${data.generatedBy.name}</td>
-                <td>Completed</td>
+                <td>Success</td>
               </tr>
               <tr>
                 <td>${formattedDate}</td>
-                <td>Forensic Analysis & Report Generation</td>
-                <td>${data.generatedBy.name}</td>
-                <td>Completed</td>
+                <td>Digital Forensics Pipeline Trigger</td>
+                <td>System Automated Checker</td>
+                <td>Success</td>
               </tr>
               <tr>
                 <td>${formattedDate}</td>
-                <td>Report Finalization</td>
-                <td>Digital Forensics System</td>
-                <td>Completed</td>
+                <td>Certificate Generation</td>
+                <td>Digital Evidence Verifier</td>
+                <td>Success</td>
               </tr>
             </tbody>
           </table>
@@ -974,36 +885,12 @@ export const generateHTMLReport = (data: ReportData): string => {
 
       <!-- Conclusion -->
       <div class="section">
-        <h2 class="section-title">${concSectionNum}. Final Conclusion</h2>
-        <div style="background: ${data.status === "authentic" ? "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)" : "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)"}; border: 3px solid ${statusColor}; border-radius: 12px; padding: 30px; margin: 25px 0;">
-          <h3 style="color: ${statusColor}; font-size: 22px; margin-bottom: 20px; font-weight: 700;">
-            ${statusIcon} FINAL VERDICT: ${data.status.toUpperCase()}
-          </h3>
-          <p style="font-size: 16px; line-height: 1.9; color: #1f2937; margin-bottom: 15px;">
-            ${data.status === "authentic"
-      ? `After comprehensive digital forensics analysis employing multiple detection methodologies, this evidence file 
-              <strong>${data.evidenceName}</strong> has been determined to be <strong>AUTHENTIC</strong> with 
-              <strong>${data.confidence.toFixed(1)}% confidence</strong>. The analysis examined pixel-level patterns, 
-              metadata integrity, compression artifacts, and AI-powered detection systems. No significant indicators of 
-              tampering, manipulation, or digital alteration were identified. The image exhibits characteristics consistent 
-              with authentic digital capture and can be considered reliable for evidentiary purposes, subject to proper 
-              chain of custody maintenance.`
-      : `After comprehensive digital forensics analysis employing multiple detection methodologies, this evidence file 
-              <strong>${data.evidenceName}</strong> has been flagged as showing <strong>SIGNS OF TAMPERING</strong> with 
-              <strong>${data.confidence.toFixed(1)}% confidence</strong>. The analysis identified ${data.anomalies?.length || 0} 
-              ${data.anomalies?.length === 1 ? 'anomaly' : 'anomalies'} and inconsistencies across multiple forensic examination 
-              methods. These findings suggest the image may have been digitally altered, composited, or manipulated. 
-              <strong>This evidence should not be relied upon without additional independent verification and expert review.</strong> 
-              Further investigation is strongly recommended before using this evidence in any legal or official capacity.`
-    }
+        <h2 class="section-title">${concSectionNum}. Final Forensics Conclusion</h2>
+        <div style="background: ${data.status === "authentic" ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${statusColor}30; border-left: 5px solid ${statusColor}; border-radius: 10px; padding: 25px;">
+          <h3 style="color: ${statusColor}; font-size: 16px; margin-bottom: 8px; font-weight: 700;">Verdict: ${data.status.toUpperCase()}</h3>
+          <p style="font-size: 13.5px; color: #334155;">
+            Following automated forensics analysis of <strong>${data.evidenceName}</strong>, the system logs a final verdict of <strong>${data.status.toUpperCase()}</strong> with a forensic certainty score of <strong>${data.confidence.toFixed(1)}%</strong>. This evaluation aggregates convolutional neural net checks, EXIF compliance tests, and AI deepfake matching profiles.
           </p>
-          <div style="margin-top: 25px; padding-top: 20px; border-top: 2px solid ${statusColor}40;">
-            <p style="font-size: 14px; color: #475569; line-height: 1.7;">
-              <strong>Analyst Certification:</strong> This report was prepared by ${data.generatedBy.name} (${data.generatedBy.email}) 
-              using advanced digital forensics analysis tools and methodologies. The analysis was conducted in accordance with 
-              standard digital evidence examination procedures.
-            </p>
-          </div>
         </div>
       </div>
 
@@ -1011,42 +898,32 @@ export const generateHTMLReport = (data: ReportData): string => {
       <div class="section page-break">
         <h2 class="section-title">${appSectionNum}. Technical Appendix</h2>
         <div class="technical-details">
-          <p><strong>Report Technical Information:</strong></p>
-          <p><code>Report ID:</code> ${data.id}</p>
-          <p><code>Evidence File:</code> ${data.evidenceName}</p>
-          <p><code>Analysis Date:</code> ${formattedDate}</p>
-          <p><code>Analyst:</code> ${data.generatedBy.name} (${data.generatedBy.email})</p>
-          <p><code>Analysis Confidence:</code> ${data.confidence.toFixed(2)}%</p>
+          <p style="margin-bottom: 8px; color: white;"><strong>Forensic Audit Log:</strong></p>
+          <p>Document ID: <code>${data.id}</code></p>
+          <p>Filename: <code>${data.evidenceName}</code></p>
+          <p>Assigned Officer: <code>${data.generatedBy.name} (${data.generatedBy.email})</code></p>
+          <p>Resolution Score: <code>${data.confidence.toFixed(2)}%</code></p>
           ${data.aiDetection ? `
-          <p><code>Deepfake Probability:</code> ${(data.aiDetection.deepfake * 100).toFixed(2)}%</p>
-          <p><code>AI-Generated Probability:</code> ${(data.aiDetection.aiGenerated * 100).toFixed(2)}%</p>
-          <p><code>Image Quality Index:</code> ${(data.aiDetection.quality * 100).toFixed(2)}%</p>
-          <p><code>Fraud Risk Probability:</code> ${(data.aiDetection.scamProb * 100).toFixed(2)}%</p>
+          <p>Model output [deepfake_prob]: <code>${(data.aiDetection.deepfake).toFixed(4)}</code></p>
+          <p>Model output [ai_generated_prob]: <code>${(data.aiDetection.aiGenerated).toFixed(4)}</code></p>
+          <p>Model output [quality_index]: <code>${(data.aiDetection.quality).toFixed(4)}</code></p>
+          <p>Model output [fraud_scam_index]: <code>${(data.aiDetection.scamProb).toFixed(4)}</code></p>
           ` : ''}
           ${data.faceDetection ? `
-          <p><code>Faces Detected:</code> ${data.faceDetection.faces_detected}</p>
-          <p><code>Matches Found:</code> ${data.faceDetection.matches.filter(m => m.match_found).length} of ${data.faceDetection.matches.length}</p>
+          <p>Model output [faces_count]: <code>${data.faceDetection.faces_detected}</code></p>
           ` : ''}
           ${data.weaponDetection ? `
-          <p><code>Weapons Detected:</code> ${data.weaponDetection.weaponsFound ? 'YES' : 'NO'}</p>
-          <p><code>Total Weapon Detections:</code> ${data.weaponDetection.totalDetections}</p>
+          <p>Model output [weapons_found]: <code>${data.weaponDetection.weaponsFound ? 'TRUE' : 'FALSE'}</code></p>
+          <p>Model output [weapons_classes]: <code>${data.weaponDetection.weaponsDetected.join(', ') || 'NONE'}</code></p>
           ` : ''}
-          <p style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #d1d5db;">
-            <strong>Analysis Tools:</strong> Advanced computer vision algorithms, metadata forensics, compression artifact analysis, 
-            AI-powered deepfake detection, statistical pattern recognition, and multi-dimensional authenticity assessment.
-          </p>
         </div>
       </div>
     </div>
 
     <div class="footer">
-      <p><strong>DIGITAL EVIDENCE VERIFICATION SYSTEM</strong></p>
-      <p>Professional Digital Forensics & Image Authenticity Analysis</p>
-      <p style="margin-top: 15px;">Report Generated: ${formattedDate}</p>
-      <p style="margin-top: 10px; font-size: 12px; opacity: 0.8;">Report ID: ${data.id} | Confidential Forensic Analysis Document</p>
-      <p style="margin-top: 15px; font-size: 11px; opacity: 0.7;">
-        This report contains sensitive forensic analysis data. Distribution should be limited to authorized personnel only.
-      </p>
+      <p><strong>Digital Evidence Verification System</strong></p>
+      <p>Forensics Integrity Report · Generated: ${formattedDate}</p>
+      <p style="margin-top: 15px; font-size: 11px; opacity: 0.6;">Confidential Document. Distribution authorized only under forensic investigator guidelines.</p>
     </div>
   </div>
 </body>

@@ -12,7 +12,7 @@ export interface Evidence {
   imageData: string;
   uploadDate: string;
   analyzedDate?: string;
-  status: 'pending' | 'analyzing' | 'complete';
+  status: 'pending' | 'analyzing' | 'complete' | 'failed';
   result?: 'authentic' | 'tampered' | null;
   confidence?: number | null;
   size: string;

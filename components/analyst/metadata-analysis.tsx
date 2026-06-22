@@ -24,7 +24,7 @@ import {
     Fingerprint,
     Grid3X3,
 } from "lucide-react";
-import { getAllEvidence } from "@/lib/evidence-storage";
+import { getEvidenceById, saveEvidence } from "@/lib/evidence-storage";
 
 interface MetadataAnalysisProps {
     preselectedEvidenceId?: string | null;
@@ -81,23 +81,24 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
     useEffect(() => {
         const loadPreselected = async () => {
             if (preselectedEvidenceId) {
-                const all = await getAllEvidence();
-                const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
-                if (found && found.imageData) {
-                    setSelectedImage(found.imageData);
-                    setFileName(found.fileName);
-                    setResult(null);
-                    setError(null);
-                    // Check if we already have the analysis result in found.metadata
-                    if (found.metadata && (found.metadata as any).verdict) {
-                        setResult(found.metadata as any);
-                        setIsAnalyzing(false);
-                    } else if (found.status === 'analyzing') {
-                        setIsAnalyzing(true);
-                    } else if (isEmbedded && found.status !== 'complete') {
-                        setIsAnalyzing(true);
+                try {
+                    const found = await getEvidenceById(preselectedEvidenceId);
+                    if (found && found.imageData) {
+                        setSelectedImage(found.imageData);
+                        setFileName(found.fileName);
+                        setResult(null);
                         setError(null);
-                        try {
+                        
+                        // Check if we already have the analysis result in found.metadata
+                        if (found.metadata && (found.metadata as any).verdict) {
+                            setResult(found.metadata as any);
+                            setIsAnalyzing(false);
+                        } else if (found.status === 'analyzing') {
+                            setIsAnalyzing(true);
+                        } else if (isEmbedded) {
+                            // Auto-run metadata analysis if missing and embedded
+                            setIsAnalyzing(true);
+                            setError(null);
                             const formData = new FormData();
                             formData.append("imageBase64", found.imageData);
                             const response = await fetch("/api/metadata-analysis", {
@@ -110,12 +111,17 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                             }
                             const data: AnalysisResult = await response.json();
                             setResult(data);
-                        } catch (err) {
-                            setError(err instanceof Error ? err.message : "Analysis failed");
-                        } finally {
-                            setIsAnalyzing(false);
+                            
+                            // Save to database
+                            found.metadata = data;
+                            await saveEvidence(found);
                         }
                     }
+                } catch (err) {
+                    console.error("Failed to load preselected evidence in metadata analysis", err);
+                    setError(err instanceof Error ? err.message : "Analysis failed");
+                } finally {
+                    setIsAnalyzing(false);
                 }
             }
         };
@@ -160,6 +166,14 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
             }
             const data: AnalysisResult = await response.json();
             setResult(data);
+
+            if (preselectedEvidenceId) {
+                const found = await getEvidenceById(preselectedEvidenceId);
+                if (found) {
+                    found.metadata = data;
+                    await saveEvidence(found);
+                }
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Analysis failed");
         } finally {
@@ -241,9 +255,23 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                     and analysis fires on mount. Show only a status indicator. */}
                 {isEmbedded ? (
                     isAnalyzing ? (
-                        <div className="flex items-center gap-3 py-3 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                            Running forensic metadata analysis…
+                        <div className="p-3.5 rounded-lg bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 relative overflow-hidden shadow-sm my-2">
+                            {/* Sliding scanning beam */}
+                            <motion.div 
+                                className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent -skew-x-12"
+                                animate={{ x: ['-100%', '200%'] }}
+                                transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                            />
+                            <div className="flex items-center gap-3 relative z-10">
+                                <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                    <Loader2 className="h-4 w-4 animate-spin text-cyan-500 relative z-10" />
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-semibold text-xs text-foreground">Metadata Analysis Active</span>
+                                    <span className="text-[10px] text-muted-foreground">Parsing EXIF structural segments and forensic tag integrity...</span>
+                                </div>
+                            </div>
                         </div>
                     ) : null
                 ) : (

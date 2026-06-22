@@ -124,7 +124,7 @@ export const handleDownloadReport = (n: { reportData?: any; fullReport?: any; re
       
       <div class="footer">
         <p><strong>EviCheck Digital Forensics Platform</strong></p>
-        <p>This is an automated forensic analysis report generated from SightEngine video detection models.</p>
+        <p>This is an automated forensic analysis report generated from Cloud AI video detection models.</p>
       </div>
     </div>
   </div>
@@ -251,7 +251,7 @@ export function UsersTab({ users, isLoading, searchQuery, setSearchQuery, filter
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search users..." className="w-full pl-10 pr-4 py-2.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div className="flex gap-1 flex-wrap">
-            {["admin", "analyst", "verifier", "guest"].map(t => (
+            {["admin", "analyst"].map(t => (
               <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 text-xs rounded-lg font-medium capitalize transition-all ${filterType === t ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>{t}</button>
             ))}
           </div>

@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card"; // Keep Card for non-embedded parts if needed, but mainly for consistent style
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/custom-tabs";
 import { Input } from "@/components/ui/input";
-import { getEvidenceByCase, getAllEvidence, renameEvidence, type StoredEvidence } from "@/lib/evidence-storage";
+import { getEvidenceByCase, getEvidenceById, renameEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 import TamperingDetection from "./tampering-detection";
 import VideoDetection from "./video-detection";
 import MetadataAnalysis from "./metadata-analysis";
@@ -70,7 +70,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
     // Background analysis runner for images
     useEffect(() => {
         const runBgAnalysis = async () => {
-            if (!evidence || evidence.status === 'complete' || isAnalyzingBg) return;
+            if (!evidence || evidence.status === 'complete' || evidence.status === 'failed' || isAnalyzingBg) return;
             if (evidence.type && !evidence.type.startsWith('image/')) return;
 
             setIsAnalyzingBg(true);
@@ -117,15 +117,21 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                 ]);
 
                 if (tamperRes.success && tamperRes.result) {
-                    const resultVal = tamperRes.result.isTampered ? "tampered" : "authentic";
-                    const confidenceVal = tamperRes.result.confidence;
+                    const isMetadataTampered = metaRes && (metaRes.risk === "HIGH" || metaRes.risk === "CRITICAL" || (metaRes.score && metaRes.score > 7));
+                    const resultVal = (tamperRes.result.isTampered || isMetadataTampered) ? "tampered" : "authentic";
+                    
+                    let confidenceVal = tamperRes.result.confidence;
+                    if (isMetadataTampered && !tamperRes.result.isTampered && metaRes) {
+                        const metaScore = metaRes.score || 0;
+                        confidenceVal = Math.min(100, Math.max(50, (metaScore / 24) * 100));
+                    }
 
-                    // Merge anomalies
-                    const anomalies = [
+                    // Merge anomalies and deduplicate to avoid duplicates
+                    const anomalies = Array.from(new Set([
                         ...(tamperRes.result.anomalies || []),
-                        ...(metaRes.metadataFlags?.map((f: any) => f.text) || []),
-                        ...(metaRes.reasons || [])
-                    ];
+                        ...(metaRes?.metadataFlags?.map((f: any) => f.text) || []),
+                        ...(metaRes?.reasons || [])
+                    ]));
 
                     // Merge metadata
                     const metadata = {
@@ -134,6 +140,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                     };
 
                     const aiDetection = tamperRes.result.aiDetection;
+                    const weaponDetection = tamperRes.result.weaponDetection;
 
                     const completedUpdates = {
                         status: 'complete' as const,
@@ -142,6 +149,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                         metadata,
                         anomalies,
                         aiDetection,
+                        weaponDetection,
                         analyzedDate: new Date().toISOString(),
                     };
 
@@ -155,9 +163,9 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
             } catch (err: any) {
                 console.error("Background forensic analysis failed:", err);
                 const failedUpdates = {
-                    status: 'complete' as const,
-                    result: 'authentic' as const,
-                    confidence: 95,
+                    status: 'failed' as const,
+                    result: null,
+                    confidence: null,
                     anomalies: [err.message || "Forensic analysis failed"],
                     analyzedDate: new Date().toISOString(),
                 };
@@ -172,7 +180,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
             }
         };
 
-        if (evidence && evidence.status !== 'complete') {
+        if (evidence && evidence.status !== 'complete' && evidence.status !== 'failed') {
             runBgAnalysis();
         }
     }, [evidenceId, evidence?.status]);
@@ -387,8 +395,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
 
     useEffect(() => {
         const loadEvidence = async () => {
-            const all = await getAllEvidence();
-            const found = all.find(e => (e.id || (e as any)._id) === evidenceId);
+            const found = await getEvidenceById(evidenceId);
             if (found) {
                 setEvidence(found);
                 setRenameValue(found.evidenceName || found.fileName);
@@ -536,11 +543,25 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                     className="max-h-[70vh] w-full object-contain bg-black"
                                 />
                             ) : (
-                                <img
-                                    src={evidence.imageData}
-                                    alt={evidence.fileName}
-                                    className="max-h-[70vh] w-auto object-contain"
-                                />
+                                <div className="relative overflow-hidden">
+                                    <img
+                                        src={evidence.imageData}
+                                        alt={evidence.fileName}
+                                        className="max-h-[70vh] w-auto object-contain"
+                                    />
+                                    {evidence.status === 'analyzing' && (
+                                        <>
+                                            {/* Glowing scanline overlay */}
+                                            <motion.div 
+                                                className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_rgba(34,211,238,0.85),_0_0_5px_rgba(34,211,238,0.5)] z-10"
+                                                animate={{ top: ['0%', '100%'] }}
+                                                transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                                            />
+                                            {/* Holographic tint overlay */}
+                                            <div className="absolute inset-0 bg-cyan-500/5 mix-blend-overlay animate-[pulse_1.5s_infinite] pointer-events-none" />
+                                        </>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -553,7 +574,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                 <div className="lg:col-span-4 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/60 shadow-sm overflow-hidden">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                         <div className="px-4 pt-4 pb-2 border-b border-border/40 bg-muted/5">
-                            <TabsList className={`w-full grid bg-muted/50 p-1 ${evidence.type?.startsWith('video/') ? 'grid-cols-3' : 'grid-cols-5'}`}>
+                            <TabsList className={`w-full grid bg-muted/50 p-1 ${evidence.type?.startsWith('video/') ? 'grid-cols-3' : 'grid-cols-4'}`}>
                                 <TabsTrigger value="details">Info</TabsTrigger>
                                 {evidence.type?.startsWith('video/') ? (
                                     <>
@@ -564,7 +585,6 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                     <>
                                         <TabsTrigger value="detect">Tamper</TabsTrigger>
                                         <TabsTrigger value="metadata">Meta</TabsTrigger>
-                                        <TabsTrigger value="face">Face</TabsTrigger>
                                         <TabsTrigger value="weapon">Weapon</TabsTrigger>
                                     </>
                                 )}
@@ -622,10 +642,51 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                         <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
                                             <div className="flex justify-between items-center mb-2">
                                                 <span className="text-sm font-medium">Global Status</span>
-                                                <Badge variant={evidence.status === 'complete' ? 'default' : 'secondary'}>
+                                                <Badge variant={
+                                                    evidence.status === 'complete' 
+                                                        ? 'default' 
+                                                        : evidence.status === 'failed' 
+                                                            ? 'destructive' 
+                                                            : 'secondary'
+                                                }>
                                                     {evidence.status.toUpperCase()}
                                                 </Badge>
                                             </div>
+                                            {evidence.status === 'failed' && (
+                                                <div className="mt-4 flex flex-col gap-2 p-3 bg-red-500/10 text-red-600 rounded-lg text-xs border border-red-500/20">
+                                                    <div className="flex items-center gap-2 font-semibold">
+                                                        <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
+                                                        <span>Analysis Failed</span>
+                                                    </div>
+                                                    <p className="text-foreground/80 mt-1">
+                                                        {evidence.anomalies?.[0] || "An unexpected error occurred during forensic checks."}
+                                                    </p>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline" 
+                                                        className="mt-2 w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-950/20"
+                                                        onClick={async () => {
+                                                            const resetUpdates = {
+                                                                status: 'pending' as const,
+                                                                result: null,
+                                                                confidence: null,
+                                                                anomalies: [],
+                                                                metadata: null,
+                                                                aiDetection: null,
+                                                                weaponDetection: null,
+                                                            };
+                                                            setEvidence(prev => prev ? { ...prev, ...resetUpdates } : null);
+                                                            await fetch(`/api/evidence/${evidence.id || (evidence as any)._id}`, {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify(resetUpdates),
+                                                            });
+                                                        }}
+                                                    >
+                                                        Retry Analysis
+                                                    </Button>
+                                                </div>
+                                            )}
                                             {evidence.result && (
                                                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-border/30">
                                                     <span className="text-sm font-medium">Verdict</span>
@@ -643,10 +704,31 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                                 </div>
                                             )}
                                             {evidence.status === 'analyzing' && (
-                                                <div className="mt-4 flex items-center gap-2 p-3 bg-blue-500/10 text-blue-600 rounded-lg text-xs border border-blue-500/20">
-                                                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                                                    <span>Running background forensic tampering and metadata checks...</span>
-                                                </div>
+                                                <motion.div 
+                                                    initial={{ opacity: 0, scale: 0.95 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    transition={{ duration: 0.3 }}
+                                                    className="mt-4 p-4 rounded-lg bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 relative overflow-hidden shadow-sm"
+                                                >
+                                                    {/* Sliding scanning beam */}
+                                                    <motion.div 
+                                                        className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent -skew-x-12"
+                                                        animate={{ x: ['-100%', '200%'] }}
+                                                        transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                                                    />
+                                                    
+                                                    <div className="flex items-center gap-3 relative z-10">
+                                                        <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                                                            {/* Pulse rings */}
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                                            <Loader2 className="h-4 w-4 animate-spin text-cyan-500 relative z-10" />
+                                                        </div>
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="font-semibold text-xs text-foreground">Forensic Scanning in Progress</span>
+                                                            <span className="text-[10px] text-muted-foreground">Running background tampering, ELA/PRNU, and metadata integrity checks...</span>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
                                             )}
                                             {evidence.status === 'complete' && (
                                                 <div className="mt-4 pt-4 border-t border-border/30 space-y-4">
@@ -780,21 +862,14 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                 </div>
                             </TabsContent>
 
-                            {/* Tab Content: Face */}
-                            <TabsContent value="face" className="mt-0 h-full">
+                            {/* Tab Content: Weapon */}
+                            <TabsContent value="weapon" className="mt-0 h-full">
                                 <div className="p-4">
-                                    <FaceAnalysis preselectedEvidenceId={evidenceId} isEmbedded={true} />
+                                    <WeaponDetection preselectedEvidenceId={evidenceId} isEmbedded={true} />
                                 </div>
                             </TabsContent>
 
-                            {/* Tab Content: Weapon */}
-                            {!evidence.type?.startsWith('video/') && (
-                                <TabsContent value="weapon" className="mt-0 h-full">
-                                    <div className="p-4">
-                                        <WeaponDetection preselectedEvidenceId={evidenceId} isEmbedded={true} />
-                                    </div>
-                                </TabsContent>
-                            )}
+
                         </div>
                     </Tabs>
                 </div>

@@ -34,7 +34,7 @@ interface EvidenceRecord {
   evidenceName?: string;
   uploadDate: string;
   analyzedDate: string;
-  status: "pending" | "analyzing" | "complete";
+  status: "pending" | "analyzing" | "complete" | "failed";
   result: "authentic" | "tampered" | null;
   confidence: number | null;
   size: string;
@@ -269,6 +269,12 @@ export default function EvidenceRecords({ onQuickAdd, onView }: EvidenceRecordsP
                 {record.status === "pending" && (
                   <Badge variant="outline">Pending</Badge>
                 )}
+                {record.status === "failed" && (
+                   <Badge variant="destructive" className="bg-red-500 text-white">
+                     <X className="h-3 w-3 mr-1" />
+                     Failed
+                   </Badge>
+                 )}
                 {record.reportGenerated && (
                   <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
                     <FileText className="h-3 w-3 mr-1" />

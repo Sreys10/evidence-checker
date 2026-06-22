@@ -108,7 +108,7 @@ function generateVideoReport(
     <div class="section">
       <div class="verdict-box">
         <h3 style="color:${result.isAiGenerated?"#991b1b":"#166534"};font-size:18px;font-weight:700;margin-bottom:10px;">Executive Summary</h3>
-        <p style="color:#374151;font-size:15px;line-height:1.8;margin-bottom:14px;">This digital forensics report presents findings from a frame-level AI-generation analysis of video evidence <strong>${fileName}</strong>. ${FRAME_COUNT} frames were extracted and each independently examined using SightEngine's image-based AI generation model.</p>
+        <p style="color:#374151;font-size:15px;line-height:1.8;margin-bottom:14px;">This digital forensics report presents findings from a frame-level AI-generation analysis of video evidence <strong>${fileName}</strong>. ${FRAME_COUNT} frames were extracted and each independently examined using our image-based AI generation model.</p>
         <div class="verdict-badge">${result.isAiGenerated ? "⚠" : "✓"} VERDICT: ${verdict}</div>
         <div class="conf-bar"><div class="conf-fill">Confidence: ${result.confidence.toFixed(1)}%</div></div>
         <p style="color:#475569;font-size:14px;line-height:1.7;">${result.isAiGenerated
@@ -172,7 +172,7 @@ function generateVideoReport(
         <h4 style="color:#92400e;margin-bottom:12px;font-weight:700;">Analysis Techniques Applied</h4>
         <ul style="margin-left:20px;color:#78350f;">
           <li style="margin:8px 0;"><strong>Frame Extraction:</strong> ${FRAME_COUNT} frames were evenly sampled across the video timeline using browser Canvas API.</li>
-          <li style="margin:8px 0;"><strong>Per-Frame AI Detection:</strong> Each frame was independently analyzed using SightEngine's <code>genai</code> model — a pixel-based detector targeting all major AI video generators (Sora, Veo, Runway, Pika, Kling, etc.).</li>
+          <li style="margin:8px 0;"><strong>Per-Frame AI Detection:</strong> Each frame was independently analyzed using our <code>genai</code> model — a pixel-based detector targeting all major AI video generators (Sora, Veo, Runway, Pika, Kling, etc.).</li>
           <li style="margin:8px 0;"><strong>Score Aggregation:</strong> Individual frame scores were averaged to produce the overall AI probability. Verdict threshold is 0.5 (50%).</li>
           <li style="margin:8px 0;"><strong>Detection Basis:</strong> Analysis is purely pixel-based — metadata stripping has no effect on results.</li>
         </ul>
@@ -440,7 +440,7 @@ export default function VideoDetection({
         };
       };
 
-      // Run analysis for all frames in parallel (SightEngine is very fast)
+      // Run analysis for all frames in parallel (Cloud AI is very fast)
       const resultsArray = await Promise.all(
         frames.map((blob, i) => analyzeFrame(blob, i))
       );

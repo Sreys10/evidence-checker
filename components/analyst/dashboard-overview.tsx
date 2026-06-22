@@ -198,6 +198,10 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
         show: { opacity: 1, y: 0 }
     };
 
+    const maxUploads = trendData.reduce((max, d) => Math.max(max, d.uploads), 0);
+    const yAxisDomain = [0, Math.max(6, maxUploads)];
+    const yAxisTicks = maxUploads <= 6 ? [0, 2, 4, 6] : undefined;
+
     return (
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
             {/* Welcome Section */}
@@ -273,7 +277,14 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                     </linearGradient>
                                 </defs>
                                 <XAxis dataKey="display" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                <YAxis 
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    tick={{ fontSize: 12 }} 
+                                    domain={yAxisDomain} 
+                                    ticks={yAxisTicks}
+                                    allowDecimals={false} 
+                                />
                                 <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
                                 <RechartsTooltip 
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}

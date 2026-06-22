@@ -11,7 +11,7 @@ import {
   Loader2, Crosshair, AlertTriangle, CheckCircle2,
   Target, Info, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { saveEvidence, getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
+import { saveEvidence, getEvidenceById, type StoredEvidence } from "@/lib/evidence-storage";
 
 // ── Types ────────────────────────────────────────────────────
 interface WeaponDetection {
@@ -86,10 +86,9 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
   useEffect(() => {
     const loadPreselected = async () => {
       if (preselectedEvidenceId) {
-        const all = await getAllEvidence();
-        const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
-        if (found && found.imageData) {
-          try {
+        try {
+          const found = await getEvidenceById(preselectedEvidenceId);
+          if (found && found.imageData) {
             const f = await dataURLtoFile(found.imageData, found.fileName);
             setFile(f);
             setError(null);
@@ -128,12 +127,12 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
               found.weaponDetection = resultData;
               await saveEvidence(found);
             }
-          } catch (e) {
-            console.error("Failed to load preselected evidence in weapon detection", e);
-            setError(e instanceof Error ? e.message : "Unknown error");
-          } finally {
-            setScanning(false);
           }
+        } catch (e) {
+          console.error("Failed to load preselected evidence in weapon detection", e);
+          setError(e instanceof Error ? e.message : "Unknown error");
+        } finally {
+          setScanning(false);
         }
       }
     };
@@ -178,8 +177,7 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
       setResult(resultData);
 
       if (preselectedEvidenceId) {
-        const allEvidence = await getAllEvidence();
-        const evidence = allEvidence.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
+        const evidence = await getEvidenceById(preselectedEvidenceId);
         if (evidence) {
           evidence.weaponDetection = resultData;
           await saveEvidence(evidence);
@@ -223,9 +221,23 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
           {file ? (
             <div className="flex items-center gap-4 p-3 bg-muted/40 rounded-lg border border-border">
               {preview && (
-                <img src={preview} alt="preview"
-                  className="h-16 w-16 object-cover rounded-lg flex-shrink-0"
-                />
+                <div className="relative h-16 w-16 rounded-lg overflow-hidden flex-shrink-0 border border-border bg-muted">
+                  <img src={preview} alt="preview"
+                    className="w-full h-full object-cover"
+                  />
+                  {scanning && (
+                    <>
+                      {/* Glowing red scanline overlay */}
+                      <motion.div 
+                        className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_8px_rgba(239,68,68,0.85)] z-10"
+                        animate={{ top: ['0%', '100%'] }}
+                        transition={{ repeat: Infinity, duration: 1.0, ease: "linear" }}
+                      />
+                      {/* Red tint overlay */}
+                      <div className="absolute inset-0 bg-red-500/5 mix-blend-overlay pointer-events-none animate-[pulse_1.2s_infinite]" />
+                    </>
+                  )}
+                </div>
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{file.name}</p>
@@ -262,17 +274,6 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Scanning for weapons…</>
               : <><Crosshair className="h-4 w-4" /> Run Weapon Detection</>}
           </Button>
-
-          {/* info strip */}
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5
-                          border border-blue-500/20 text-xs text-blue-400">
-            <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-            <span>
-              Powered by Roboflow&nbsp;
-              <code className="font-mono">general-segmentation-api</code>
-              &nbsp;— workspace&nbsp;<code className="font-mono">shreyas-deshmukh</code>
-            </span>
-          </div>
         </CardContent>
       </Card>
 
@@ -282,8 +283,14 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
           <motion.div
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
           >
-            <Card className="border-red-500/30 bg-red-500/5">
-              <CardContent className="py-5">
+            <Card className="border-red-500/30 bg-red-500/5 relative overflow-hidden shadow-sm">
+              {/* Sliding scanning beam */}
+              <motion.div 
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/10 to-transparent -skew-x-12"
+                animate={{ x: ['-100%', '200%'] }}
+                transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+              />
+              <CardContent className="py-5 relative z-10">
                 <div className="flex items-center gap-4">
                   <div className="relative h-12 w-12 flex-shrink-0">
                     <div className="absolute inset-0 rounded-full border-2 border-red-500/30 animate-ping" />
@@ -293,9 +300,9 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
                     </div>
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">Scanning image…</p>
+                    <p className="font-semibold text-sm text-foreground font-mono">Forensic Threat Scanning Active…</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Roboflow AI is analysing for weapons — this may take a few seconds
+                      Analyzing pixel structures for known weapon geometries and firearm profiles
                     </p>
                   </div>
                 </div>
@@ -471,7 +478,7 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
                   className="w-full flex items-center justify-between px-4 py-3 text-xs
                              text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <span className="font-mono">Raw Roboflow Response</span>
+                  <span className="font-mono">Raw Cloud AI Response</span>
                   {showRaw ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
                 <AnimatePresence>

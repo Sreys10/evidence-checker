@@ -156,28 +156,51 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
 
       if (res.ok) {
         const data = await res.json();
-        // Persist quick analysis result back to the evidence record
-        await fetch(`/api/evidence/${dbId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'complete',
-            result: (data.riskLevel === 'LOW' || data.riskLevel === 'MINIMAL') ? 'authentic' : 'tampered',
-            confidence: data.elaScore !== undefined ? Math.round((1 - data.elaScore / 24) * 100) : null,
-            analyzedDate: new Date().toISOString(),
-          }),
-        });
-        setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzed' }));
+        if (data.success && data.result) {
+          const analysis = data.result;
+          // Persist all analysis results back to the evidence record
+          await fetch(`/api/evidence/${dbId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'complete',
+              result: analysis.isTampered ? 'tampered' : 'authentic',
+              confidence: analysis.confidence,
+              metadata: analysis.metadata || {},
+              anomalies: analysis.anomalies || [],
+              aiDetection: analysis.aiDetection || null,
+              weaponDetection: analysis.weaponDetection || null,
+              analyzedDate: new Date().toISOString(),
+            }),
+          });
+          setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzed' }));
+        } else {
+          throw new Error('Missing result field in API response');
+        }
       } else {
-        // Analysis failed — revert status to pending so the analyst can retry manually
+        // Analysis failed — set status to failed in DB
+        const errorData = await res.json().catch(() => ({}));
+        const errMsg = errorData.details || errorData.error || 'Auto-analysis failed';
         await fetch(`/api/evidence/${dbId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'pending' }),
+          body: JSON.stringify({ 
+            status: 'failed',
+            anomalies: [errMsg],
+          }),
         });
         setAnalysisStatus(prev => ({ ...prev, [fileId]: 'failed' }));
       }
-    } catch {
+    } catch (err: any) {
+      const errMsg = err.message || 'Auto-analysis connection error';
+      await fetch(`/api/evidence/${dbId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: 'failed',
+          anomalies: [errMsg],
+        }),
+      }).catch(() => {});
       setAnalysisStatus(prev => ({ ...prev, [fileId]: 'failed' }));
     }
   };
@@ -925,9 +948,21 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
 
                     {/* Analyzing badge */}
                     {file.status === "success" && analysisStatus[file.id] === 'analyzing' && (
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="h-7 w-7 text-amber-400 animate-spin" />
-                        <span className="text-amber-300 text-[11px] font-semibold tracking-wide uppercase">Analyzing…</span>
+                      <div className="absolute inset-0 bg-black/75 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 z-10 overflow-hidden">
+                        {/* Glowing scanline overlay */}
+                        <motion.div 
+                          className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_10px_rgba(34,211,238,0.85)] z-20"
+                          animate={{ top: ['0%', '100%'] }}
+                          transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                        />
+                        {/* Holographic tint */}
+                        <div className="absolute inset-0 bg-cyan-500/5 pointer-events-none animate-pulse" />
+                        
+                        <div className="relative flex h-8 w-8 items-center justify-center z-20">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400/60 opacity-75"></span>
+                          <Loader2 className="h-6 w-6 animate-spin text-cyan-400 relative z-10" />
+                        </div>
+                        <span className="text-cyan-300 text-[10px] font-bold tracking-widest uppercase animate-pulse z-20">Analyzing…</span>
                       </div>
                     )}
 

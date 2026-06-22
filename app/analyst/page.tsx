@@ -35,6 +35,7 @@ import {
   AlertTriangle,
   MessageSquare,
   Video,
+  Target,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -51,8 +52,9 @@ import EvidenceDetail from "@/components/analyst/evidence-detail";
 import { getUserStats, getEvidenceById } from "@/lib/evidence-storage";
 import ChatPanel from "@/components/analyst/chat-panel";
 import VideoDetection from "@/components/analyst/video-detection";
+import WeaponDetection from "@/components/analyst/weapon-detection";
 
-type ActiveTab = "overview" | "upload" | "detect" | "video" | "metadata" | "face" | "report" | "blockchain" | "records" | "evidence-detail" | "chats";
+type ActiveTab = "overview" | "upload" | "detect" | "video" | "metadata" | "face" | "weapon" | "report" | "blockchain" | "records" | "evidence-detail" | "chats";
 
 interface User {
   _id?: string;
@@ -202,6 +204,7 @@ export default function AnalystPage() {
     { id: "video" as ActiveTab, label: "Video Detection", icon: Video },
     { id: "metadata" as ActiveTab, label: "Metadata Analysis", icon: FileSearch },
     { id: "face" as ActiveTab, label: "Face Analysis", icon: Fingerprint },
+    { id: "weapon" as ActiveTab, label: "Weapon Detection", icon: Target },
     { id: "report" as ActiveTab, label: "Generate Report", icon: FileText },
     { id: "records" as ActiveTab, label: "Evidence Records", icon: History },
     { id: "blockchain" as ActiveTab, label: "Blockchain", icon: LinkIcon },
@@ -465,6 +468,7 @@ export default function AnalystPage() {
                     />
                   )}
                   {activeTab === "face" && <FaceAnalysis preselectedEvidenceId={preselectedEvidenceId} />}
+                  {activeTab === "weapon" && <WeaponDetection preselectedEvidenceId={preselectedEvidenceId} />}
                   {activeTab === "report" && <ReportGeneration />}
                   {activeTab === "evidence-detail" && viewingEvidenceId && (
                     <EvidenceDetail

@@ -15,7 +15,7 @@ export interface StoredEvidence {
   imageData: string;
   uploadDate: string;
   analyzedDate?: string;
-  status: "pending" | "analyzing" | "complete";
+  status: "pending" | "analyzing" | "complete" | "failed";
   result?: "authentic" | "tampered" | null;
   confidence?: number | null;
   size: string;
@@ -119,7 +119,7 @@ export async function updateEvidenceAnalysis(
   userId?: string
 ): Promise<void> {
   try {
-    const updates = {
+    const updates: any = {
       analyzedDate: new Date().toISOString(),
       status: "complete",
       result: analysis.isTampered ? "tampered" : "authentic",
@@ -128,6 +128,9 @@ export async function updateEvidenceAnalysis(
       anomalies: analysis.anomalies,
       aiDetection: analysis.aiDetection,
     };
+    if (analysis.weaponDetection) {
+      updates.weaponDetection = analysis.weaponDetection;
+    }
     await fetch(`/api/evidence/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

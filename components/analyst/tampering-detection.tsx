@@ -11,7 +11,7 @@ import {
   Loader2,
   Image as ImageIcon,
 } from "lucide-react";
-import { saveEvidence, updateEvidenceAnalysis, getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
+import { saveEvidence, updateEvidenceAnalysis, getEvidenceById, getAllEvidence, type StoredEvidence } from "@/lib/evidence-storage";
 
 interface DetectionResult {
   id: string;
@@ -35,6 +35,16 @@ interface DetectionResult {
       quality: number;
       scamProb: number;
       rawResults?: Record<string, unknown>;
+    };
+    weaponDetection?: {
+      weaponsFound: boolean;
+      weaponsDetected: string[];
+      detections: Array<{
+        class: string;
+        confidence: number;
+        bbox: { x: number; y: number; width: number; height: number };
+      }>;
+      totalDetections: number;
     };
   } | null;
 }
@@ -74,24 +84,40 @@ export default function TamperingDetection({
   useEffect(() => {
     const loadPreselected = async () => {
       if (preselectedEvidenceId) {
-        const all = await getAllEvidence();
-        const found = all.find(e => (e.id || (e as any)._id) === preselectedEvidenceId);
-        if (found && found.imageData) {
-          // Guard: skip video evidence — tampering detection only supports images.
-          if (found.type && found.type.startsWith('video/')) {
-            console.warn('TamperingDetection: preselected evidence is a video. Skipping auto-load.');
-            return;
-          }
-          // If already fully analyzed, skip re-running
-          if (found.status === 'complete' && found.result) {
-            // Results will be shown from the loaded results list — nothing to do
-            return;
-          }
-          if (found.status === 'analyzing') {
-            setIsAnalyzing(true);
-            return;
-          }
-          try {
+        try {
+          const found = await getEvidenceById(preselectedEvidenceId);
+          if (found && found.imageData) {
+            // Guard: skip video evidence — tampering detection only supports images.
+            if (found.type && found.type.startsWith('video/')) {
+              console.warn('TamperingDetection: preselected evidence is a video. Skipping auto-load.');
+              return;
+            }
+            // If already fully analyzed, skip re-running and push full result to local state
+            if (found.status === 'complete' && found.result) {
+              const fullResult: DetectionResult = {
+                id: found.id || (found as any)._id,
+                fileName: found.fileName,
+                imagePreview: found.imageData,
+                status: "complete",
+                result: {
+                  isTampered: found.result === "tampered",
+                  confidence: found.confidence || 0,
+                  anomalies: found.anomalies || [],
+                  metadata: found.metadata || {},
+                  aiDetection: found.aiDetection,
+                  weaponDetection: found.weaponDetection,
+                }
+              };
+              setResults(prev => {
+                const filtered = prev.filter(r => r.id !== fullResult.id);
+                return [fullResult, ...filtered];
+              });
+              return;
+            }
+            if (found.status === 'analyzing') {
+              setIsAnalyzing(true);
+              return;
+            }
             const file = await dataURLtoFile(found.imageData, found.fileName);
             setSelectedFile(file);
 
@@ -101,9 +127,9 @@ export default function TamperingDetection({
               if (onAnalysisStarted) onAnalysisStarted();
               startAnalysis(file);
             }
-          } catch (e) {
-            console.error("Failed to load preselected evidence", e);
           }
+        } catch (e) {
+          console.error("Failed to load preselected evidence", e);
         }
       }
     };
@@ -127,6 +153,7 @@ export default function TamperingDetection({
         metadata: evidence.metadata || {},
 
         aiDetection: evidence.aiDetection,
+        weaponDetection: evidence.weaponDetection,
       } : null,
     }));
 
@@ -201,6 +228,7 @@ export default function TamperingDetection({
             anomalies: data.result.anomalies || [],
             metadata: data.result.metadata || {},
             aiDetection: data.result.aiDetection,
+            weaponDetection: data.result.weaponDetection,
           };
 
           await updateEvidenceAnalysis(evidenceId as string, {
@@ -209,6 +237,7 @@ export default function TamperingDetection({
             anomalies: data.result.anomalies || [],
             metadata: data.result.metadata,
             aiDetection: data.result.aiDetection,
+            weaponDetection: data.result.weaponDetection,
           });
 
           setCurrentAnalysis(null);
@@ -329,26 +358,48 @@ export default function TamperingDetection({
       {/* Current Analysis */}
       {
         currentAnalysis && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Analysis in Progress</CardTitle>
+          <Card className="border border-cyan-500/20 bg-cyan-950/5 shadow-md overflow-hidden relative">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold tracking-wider text-cyan-500 uppercase flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Forensic Analysis Active
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4">
-                <div className="relative w-32 h-32 bg-muted rounded-lg overflow-hidden">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="relative w-28 h-28 bg-muted rounded-lg overflow-hidden border border-cyan-500/30 flex-shrink-0">
                   <img
                     src={currentAnalysis.imagePreview}
                     alt={currentAnalysis.fileName}
                     className="w-full h-full object-cover"
                   />
+                  {/* Glowing scanline overlay */}
+                  <motion.div 
+                    className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_10px_rgba(34,211,238,0.85)] z-10"
+                    animate={{ top: ['0%', '100%'] }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                  />
+                  <div className="absolute inset-0 bg-cyan-500/5 mix-blend-overlay pointer-events-none animate-pulse" />
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">{currentAnalysis.fileName}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <span className="text-sm text-muted-foreground">
-                      Analyzing image for tampering...
-                    </span>
+                <div className="flex-1 w-full">
+                  <p className="font-semibold text-sm text-foreground truncate">{currentAnalysis.fileName}</p>
+                  
+                  <div className="mt-2.5 p-3 rounded-lg bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 relative overflow-hidden shadow-sm">
+                    {/* Sliding scanning beam */}
+                    <motion.div 
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/15 to-transparent -skew-x-12"
+                      animate={{ x: ['-100%', '200%'] }}
+                      transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                    />
+                    <div className="flex items-center gap-3 relative z-10">
+                      <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <Loader2 className="h-4 w-4 animate-spin text-cyan-500 relative z-10" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-xs text-foreground">Forensic Scanning in Progress</span>
+                        <span className="text-[10px] text-muted-foreground">Running ELA compression, noise map uniformity, and metadata checks...</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -515,6 +566,24 @@ export default function TamperingDetection({
                                   </span>
                                 </div>
                               </div>
+                              {result.result.weaponDetection && (
+                                <div className="bg-muted/50 p-3 rounded-lg">
+                                  <p className="text-xs text-muted-foreground mb-1">Weapon Detection</p>
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                      <motion.div
+                                        className={`h-full ${result.result.weaponDetection.weaponsFound ? 'bg-red-500' : 'bg-green-500'}`}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: result.result.weaponDetection.weaponsFound ? '100%' : '0%' }}
+                                        transition={{ duration: 1, delay: 1.6 }}
+                                      />
+                                    </div>
+                                    <span className={`text-sm font-medium ${result.result.weaponDetection.weaponsFound ? 'text-red-500' : 'text-green-500'}`}>
+                                      {result.result.weaponDetection.weaponsFound ? 'Threat' : 'Safe'}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
