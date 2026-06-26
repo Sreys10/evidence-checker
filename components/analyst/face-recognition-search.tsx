@@ -35,7 +35,7 @@ interface MatchedPerson {
 }
 
 interface SearchResult {
-  face_index: int;
+  face_index: number;
   bounding_box: number[]; // [x1, y1, x2, y2]
   matched: boolean;
   confidence?: number;
