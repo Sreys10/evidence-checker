@@ -69,20 +69,7 @@ export async function POST(request: NextRequest) {
         maxBodyLength: Infinity,
       });
 
-      const responseText = await response.text();
-      let responseData: any;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch {
-        // Backend returned non-JSON (HTML error page, connection refused, etc.)
-        console.error('Backend returned non-JSON:', responseText.slice(0, 200));
-        return NextResponse.json(
-          { error: `Backend service error: ${responseText.slice(0, 150)}`, success: false },
-          { status: 502 }
-        );
-      }
-
-      return NextResponse.json(responseData, { status: 200 });
+      return NextResponse.json(response.data, { status: 200 });
     } catch (backendError: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = backendError as any;
