@@ -4,7 +4,7 @@ import axios from 'axios';
 import { uploadImageToCloudinary } from '@/lib/cloudinary';
 
 const BACKEND_SERVICE_URL =
-  process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_SERVICE_URL || 'http://localhost:5000';
+  process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_SERVICE_URL || 'http://localhost:5001';
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,7 +69,20 @@ export async function POST(request: NextRequest) {
         maxBodyLength: Infinity,
       });
 
-      return NextResponse.json(response.data, { status: 200 });
+      const responseText = await response.text();
+      let responseData: any;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        // Backend returned non-JSON (HTML error page, connection refused, etc.)
+        console.error('Backend returned non-JSON:', responseText.slice(0, 200));
+        return NextResponse.json(
+          { error: `Backend service error: ${responseText.slice(0, 150)}`, success: false },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json(responseData, { status: 200 });
     } catch (backendError: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = backendError as any;

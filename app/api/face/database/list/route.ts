@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost:5000';
+const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost:5001';
 
 export async function GET(_request: NextRequest) {
   try {
@@ -11,7 +11,16 @@ export async function GET(_request: NextRequest) {
       }
     });
 
-    const data = await response.json();
+    const responseText = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      return NextResponse.json(
+        { error: `Backend returned invalid response. Make sure BACKEND_SERVICE_URL is set correctly and backend is running.` },
+        { status: 502 }
+      );
+    }
 
     if (!response.ok) {
       return NextResponse.json(

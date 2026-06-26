@@ -172,7 +172,7 @@ export default function FaceDatabase() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to add person to database";
       console.error("Error adding person:", err);
-      alert(`Error: ${errorMessage}\n\nPlease check:\n1. Backend service is running\n2. PostgreSQL connection is working\n3. Image file is valid`);
+      alert(`Failed to add person:\n\n${errorMessage}\n\nIf using a deployed backend (Render), it may be sleeping. Open your Render URL in a browser to wake it up, then try again.`);
     } finally {
       setIsAdding(false);
     }

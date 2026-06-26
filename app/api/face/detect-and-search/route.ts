@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Backend service URL - set via environment variable
-const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost:5000';
+const BACKEND_SERVICE_URL = process.env.BACKEND_SERVICE_URL || 'http://localhost:5001';
 
 // Log backend URL in development (not in production for security)
 if (process.env.NODE_ENV === 'development') {
@@ -60,7 +60,16 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      const data = await backendResponse.json();
+      const responseText = await backendResponse.text();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        return NextResponse.json(
+          { error: 'Backend returned invalid response. Check if BACKEND_SERVICE_URL is correct and backend is running.' },
+          { status: 502 }
+        );
+      }
 
       if (!backendResponse.ok) {
         return NextResponse.json(
