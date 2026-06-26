@@ -133,9 +133,8 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
   // evidence record's status in the DB. Other forensic checks (face search,
   // metadata, weapon) remain on-demand from the detection screen.
   const triggerAutoAnalysis = async (fileId: string, dbId: string, imageUrl: string) => {
-    // Skip auto-analysis for video files (ELA/PRNU are image-only)
     const uploadedFile = uploadedFiles.find(f => f.id === fileId);
-    if (uploadedFile?.type?.startsWith('video/')) return;
+    if (!uploadedFile) return;
 
     setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzing' }));
 
@@ -147,49 +146,233 @@ export default function ImageUpload({ onNavigateToDetect, preselectedCaseId }: I
         body: JSON.stringify({ status: 'analyzing' }),
       });
 
-      // Call detect-tampering with the stored Cloudinary URL
-      const res = await fetch('/api/detect-tampering', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl }),
-      });
+      if (uploadedFile.type?.startsWith('video/')) {
+        const fileObj = uploadedFile.file;
+        const objectUrl = URL.createObjectURL(fileObj);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.result) {
-          const analysis = data.result;
-          // Persist all analysis results back to the evidence record
-          await fetch(`/api/evidence/${dbId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: 'complete',
-              result: analysis.isTampered ? 'tampered' : 'authentic',
-              confidence: analysis.confidence,
-              metadata: analysis.metadata || {},
-              anomalies: analysis.anomalies || [],
-              aiDetection: analysis.aiDetection || null,
-              weaponDetection: analysis.weaponDetection || null,
-              analyzedDate: new Date().toISOString(),
-            }),
+        const video = document.createElement('video');
+        video.src = objectUrl;
+        video.crossOrigin = 'anonymous';
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => resolve();
+          video.onerror = () => reject(new Error('Failed to load video metadata'));
+          setTimeout(() => reject(new Error('Video metadata timeout')), 10000);
+        });
+
+        const frameCount = 5;
+        const duration = video.duration;
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D context not available');
+
+        const blobs: Blob[] = [];
+        const interval = duration / (frameCount + 1);
+
+        for (let i = 0; i < frameCount; i++) {
+          const seekTime = interval * (i + 1);
+          await new Promise<void>((resolve, reject) => {
+            let resolved = false;
+            const handleSeeked = () => {
+              if (resolved) return;
+              resolved = true;
+              try {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob((blob) => {
+                  if (blob) blobs.push(blob);
+                  resolve();
+                }, 'image/jpeg', 0.85);
+              } catch (err) {
+                reject(err);
+              }
+            };
+            video.onseeked = handleSeeked;
+            video.onerror = () => {
+              if (resolved) return;
+              resolved = true;
+              reject(new Error('Video seek error'));
+            };
+            setTimeout(() => {
+              if (resolved) return;
+              resolved = true;
+              ctx.fillStyle = 'black';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              canvas.toBlob((blob) => {
+                if (blob) blobs.push(blob);
+                resolve();
+              }, 'image/jpeg', 0.85);
+            }, 4000);
+            video.currentTime = Math.min(seekTime, duration - 0.1);
           });
-          setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzed' }));
-        } else {
-          throw new Error('Missing result field in API response');
         }
-      } else {
-        // Analysis failed — set status to failed in DB
-        const errorData = await res.json().catch(() => ({}));
-        const errMsg = errorData.details || errorData.error || 'Auto-analysis failed';
+
+        URL.revokeObjectURL(objectUrl);
+
+        const frameResults = await Promise.all(blobs.map(async (blob, index) => {
+          let aiScore = 0;
+          try {
+            const aiFormData = new FormData();
+            aiFormData.append("frame", blob, `frame_${index}.jpg`);
+            aiFormData.append("frameIndex", index.toString());
+
+            const aiRes = await fetch("/api/video-detection", {
+              method: "POST",
+              body: aiFormData,
+            });
+            if (aiRes.ok) {
+              const aiData = await aiRes.json();
+              aiScore = aiData.aiGeneratedScore ?? 0;
+            }
+          } catch (e) {
+            console.error('Frame AI detection error:', e);
+          }
+
+          let weaponData = null;
+          try {
+            const weaponFormData = new FormData();
+            weaponFormData.append("image", blob, `frame_${index}.jpg`);
+
+            const weaponRes = await fetch("/api/weapon-detection", {
+              method: "POST",
+              body: weaponFormData,
+            });
+            if (weaponRes.ok) {
+              weaponData = await weaponRes.json();
+            }
+          } catch (e) {
+            console.error('Frame weapon detection error:', e);
+          }
+
+          return {
+            index,
+            aiScore,
+            weaponData,
+          };
+        }));
+
+        const totalFrames = frameResults.length;
+        const aiScores = frameResults.map(r => r.aiScore);
+        const avgAiScore = aiScores.reduce((sum, val) => sum + val, 0) / totalFrames;
+        const maxAiScore = Math.max(...aiScores);
+        const minAiScore = Math.min(...aiScores);
+        const aiGeneratedFrames = frameResults.filter(r => r.aiScore > 0.5).length;
+        const authenticFrames = totalFrames - aiGeneratedFrames;
+        const isAiGenerated = avgAiScore > 0.5;
+        const confidence = isAiGenerated ? avgAiScore * 100 : (1 - avgAiScore) * 100;
+        const verdict = isAiGenerated ? "AI-Generated Video" : "Authentic Video";
+
+        const aiDetection = {
+          isAiGenerated,
+          verdict,
+          confidence,
+          avgAiScore,
+          maxAiScore,
+          minAiScore,
+          totalFrames,
+          aiGeneratedFrames,
+          authenticFrames,
+          frames: frameResults.map(r => ({ frameIndex: r.index, aiGeneratedScore: r.aiScore })),
+        };
+
+        const detections: any[] = [];
+        const weaponsDetected: string[] = [];
+        frameResults.forEach(r => {
+          if (r.weaponData?.detections) {
+            detections.push(...r.weaponData.detections);
+          }
+          if (r.weaponData?.weaponsDetected) {
+            r.weaponData.weaponsDetected.forEach((w: string) => {
+              if (!weaponsDetected.includes(w)) {
+                weaponsDetected.push(w);
+              }
+            });
+          }
+        });
+
+        const weaponsFound = frameResults.some(r => r.weaponData?.weaponsFound);
+        const totalDetections = detections.length;
+
+        const weaponDetection = {
+          weaponsFound,
+          weaponsDetected,
+          detections,
+          totalDetections,
+          anomalies: weaponsFound ? [`Weapons detected in video frames: ${weaponsDetected.join(', ')}`] : [],
+        };
+
+        const resultStatus = (isAiGenerated || weaponsFound) ? 'tampered' : 'authentic';
+
+        const anomalies = [
+          `AI-Generated frames ratio: ${((aiGeneratedFrames / totalFrames) * 100).toFixed(1)}%`,
+          ...(weaponsFound ? [`Weapons detected: ${weaponsDetected.join(', ')}`] : [])
+        ];
+
         await fetch(`/api/evidence/${dbId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            status: 'failed',
-            anomalies: [errMsg],
+          body: JSON.stringify({
+            status: 'complete',
+            result: resultStatus,
+            confidence: Math.max(confidence, weaponsFound ? 90 : 0),
+            metadata: { videoDuration: duration, frameCount: totalFrames },
+            anomalies,
+            aiDetection,
+            weaponDetection,
+            analyzedDate: new Date().toISOString(),
           }),
         });
-        setAnalysisStatus(prev => ({ ...prev, [fileId]: 'failed' }));
+
+        setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzed' }));
+      } else {
+        // Call detect-tampering with the stored Cloudinary URL
+        const res = await fetch('/api/detect-tampering', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.result) {
+            const analysis = data.result;
+            // Persist all analysis results back to the evidence record
+            await fetch(`/api/evidence/${dbId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: 'complete',
+                result: analysis.isTampered ? 'tampered' : 'authentic',
+                confidence: analysis.confidence,
+                metadata: analysis.metadata || {},
+                anomalies: analysis.anomalies || [],
+                aiDetection: analysis.aiDetection || null,
+                weaponDetection: analysis.weaponDetection || null,
+                analyzedDate: new Date().toISOString(),
+              }),
+            });
+            setAnalysisStatus(prev => ({ ...prev, [fileId]: 'analyzed' }));
+          } else {
+            throw new Error('Missing result field in API response');
+          }
+        } else {
+          // Analysis failed — set status to failed in DB
+          const errorData = await res.json().catch(() => ({}));
+          const errMsg = errorData.details || errorData.error || 'Auto-analysis failed';
+          await fetch(`/api/evidence/${dbId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              status: 'failed',
+              anomalies: [errMsg],
+            }),
+          });
+          setAnalysisStatus(prev => ({ ...prev, [fileId]: 'failed' }));
+        }
       }
     } catch (err: any) {
       const errMsg = err.message || 'Auto-analysis connection error';

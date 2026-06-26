@@ -337,6 +337,7 @@ interface VideoDetectionProps {
   isEmbedded?: boolean;
   autoStart?: boolean;
   onAnalysisStarted?: () => void;
+  onAnalysisComplete?: () => void;
 }
 
 export default function VideoDetection({
@@ -344,6 +345,7 @@ export default function VideoDetection({
   isEmbedded = false,
   autoStart = false,
   onAnalysisStarted,
+  onAnalysisComplete,
 }: VideoDetectionProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -457,6 +459,7 @@ export default function VideoDetection({
 
       const aiGeneratedFrames = resultsArray.filter(r => r.aiGeneratedScore > 0.5).length;
       const authenticFrames = totalFrames - aiGeneratedFrames;
+      // Standard verdict mapping: high AI score means AI-generated (tampered), low score means authentic
       const isAiGenerated = avgAiScore > 0.5;
 
       const verdict = isAiGenerated
@@ -490,6 +493,10 @@ export default function VideoDetection({
           aiDetection: aggregatedResult,
         }).catch(err => console.error("Failed to save video analysis results:", err));
       }
+
+      if (onAnalysisComplete) {
+        onAnalysisComplete();
+      }
     } catch (err: any) {
       setError(err.message || "An error occurred during analysis.");
     } finally {
@@ -522,9 +529,15 @@ export default function VideoDetection({
             if (autoStart && !isRunningRef.current) {
               isRunningRef.current = true;
               if (onAnalysisStarted) onAnalysisStarted();
-              setTimeout(() => {
-                handleAnalyze();
-              }, 500);
+              
+              const checkAndRun = () => {
+                if (videoRef.current) {
+                  handleAnalyze();
+                } else {
+                  setTimeout(checkAndRun, 100);
+                }
+              };
+              setTimeout(checkAndRun, 100);
             }
           }
         }

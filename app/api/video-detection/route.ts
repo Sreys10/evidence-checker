@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       frameIndex: Number(frameIndex),
-      aiGeneratedScore: data.type?.ai_generated ?? 0,
+      aiGeneratedScore: data.ai_generated?.type?.ai_generated ?? data.type?.ai_generated ?? 0,
     });
   } catch (error) {
     console.error('Frame analysis error:', error);

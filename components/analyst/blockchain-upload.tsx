@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { connectWallet, storeEvidenceOnBlockchain } from "@/lib/web3-service";
+import { uploadToIPFS } from "@/lib/ipfs-service";
 import {
   Card,
   CardContent,
@@ -30,6 +32,8 @@ import {
   FileImage,
   ChevronDown,
   ChevronUp,
+  Lock,
+  Loader2,
 } from "lucide-react";
 import { getAllEvidence, getAllCases, type StoredEvidence, type StoredCase } from "@/lib/evidence-storage";
 
@@ -95,6 +99,12 @@ export default function BlockchainUpload({ currentUser }: BlockchainUploadProps)
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "preserved" | "unpreserved">("all");
 
+  // Blockchain / Secure Now states
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [preservingId, setPreservingId] = useState<string | null>(null);
+  const [preserveStatus, setPreserveStatus] = useState<Record<string, string>>({});
+  const [preserveError, setPreserveError] = useState<Record<string, string>>({});
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -140,10 +150,80 @@ export default function BlockchainUpload({ currentUser }: BlockchainUploadProps)
     loadData();
   }, [loadData]);
 
+  // Check if wallet already connected on mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
+      window.ethereum.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
+        if (accounts.length > 0) setWalletAddress(accounts[0]);
+      }).catch(() => {});
+    }
+  }, []);
+
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleSecureNow = async (ev: StoredEvidence) => {
+    const evId = ev.id || (ev as any)._id || "";
+    setPreservingId(evId);
+    setPreserveError(prev => ({ ...prev, [evId]: "" }));
+
+    try {
+      // Step 1: Connect wallet if not connected
+      let account = walletAddress;
+      if (!account) {
+        setPreserveStatus(prev => ({ ...prev, [evId]: "Connecting wallet..." }));
+        account = await connectWallet();
+        setWalletAddress(account);
+      }
+
+      // Step 2: Convert imageData to File for IPFS upload
+      setPreserveStatus(prev => ({ ...prev, [evId]: "Preparing file..." }));
+      const res = await fetch(ev.imageData);
+      const blob = await res.blob();
+      const file = new File([blob], ev.fileName, { type: blob.type });
+
+      // Step 3: Upload to IPFS (Pinata)
+      setPreserveStatus(prev => ({ ...prev, [evId]: "Pinning to IPFS..." }));
+      const ipfsHash = await uploadToIPFS(file);
+
+      // Step 4: Store on-chain
+      setPreserveStatus(prev => ({ ...prev, [evId]: "Awaiting wallet confirmation..." }));
+      const userStr = typeof window !== "undefined" ? localStorage.getItem('user') : null;
+      const user = userStr ? JSON.parse(userStr) : null;
+      const analystId = user?._id || user?.id || "unknown";
+      const verdictStr = ev.result === "tampered" ? "Tampered" : "Authentic";
+      const receipt = await storeEvidenceOnBlockchain(
+        ipfsHash,
+        analystId,
+        ev.confidence || 100,
+        verdictStr
+      );
+
+      // Step 5: Update DB record
+      setPreserveStatus(prev => ({ ...prev, [evId]: "Updating records..." }));
+      await fetch(`/api/evidence/${evId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ipfsHash, blockchainHash: receipt.hash }),
+      });
+
+      setPreserveStatus(prev => ({ ...prev, [evId]: "✅ Preserved on-chain!" }));
+      // Refresh the list after a short delay
+      setTimeout(() => {
+        loadData();
+        setPreserveStatus(prev => ({ ...prev, [evId]: "" }));
+      }, 2000);
+
+    } catch (err: any) {
+      console.error("Secure Now error:", err);
+      setPreserveError(prev => ({ ...prev, [evId]: err.message || "Failed to preserve" }));
+      setPreserveStatus(prev => ({ ...prev, [evId]: "" }));
+    } finally {
+      setPreservingId(null);
+    }
   };
 
   const preserved = allEvidence.filter((e) => !!e.blockchainHash);
@@ -558,13 +638,33 @@ export default function BlockchainUpload({ currentUser }: BlockchainUploadProps)
                                     )}
                                   </AnimatePresence>
 
-                                  {/* Not-preserved hint */}
+                                  {/* Not-preserved — Secure Now button */}
                                   {!isPreserved && (
-                                    <div className="px-3 pb-3">
-                                      <p className="text-[11px] text-amber-600/80 dark:text-amber-500/70 flex items-center gap-1.5">
-                                        <AlertCircle className="h-3 w-3 shrink-0" />
-                                        Open this evidence in Evidence Records → click <strong>&quot;Secure Now&quot;</strong> to preserve on blockchain.
-                                      </p>
+                                    <div className="px-3 pb-3 space-y-2">
+                                      {preserveStatus[evId] ? (
+                                        <div className="flex items-center gap-2 text-[11px] text-cyan-600 dark:text-cyan-400 font-medium">
+                                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                                          {preserveStatus[evId]}
+                                        </div>
+                                      ) : preserveError[evId] ? (
+                                        <p className="text-[11px] text-red-500 flex items-center gap-1.5">
+                                          <AlertCircle className="h-3 w-3 shrink-0" />
+                                          {preserveError[evId]}
+                                        </p>
+                                      ) : null}
+                                      <Button
+                                        size="sm"
+                                        disabled={preservingId === evId}
+                                        onClick={(e) => { e.stopPropagation(); handleSecureNow(ev); }}
+                                        className="h-7 text-[11px] px-3 gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white shadow-sm w-full sm:w-auto"
+                                      >
+                                        {preservingId === evId ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Lock className="h-3 w-3" />
+                                        )}
+                                        {preservingId === evId ? "Securing..." : walletAddress ? "Secure Now" : "Connect & Secure"}
+                                      </Button>
                                     </div>
                                   )}
                                 </motion.div>

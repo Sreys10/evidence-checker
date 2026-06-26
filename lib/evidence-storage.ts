@@ -119,10 +119,18 @@ export async function updateEvidenceAnalysis(
   userId?: string
 ): Promise<void> {
   try {
+    // Prefer explicit 'result' field (used by video-detection) over 'isTampered' (used by image analysis)
+    let resultValue: "tampered" | "authentic";
+    if (analysis.result === "tampered" || analysis.result === "authentic") {
+      resultValue = analysis.result;
+    } else {
+      resultValue = analysis.isTampered ? "tampered" : "authentic";
+    }
+
     const updates: any = {
       analyzedDate: new Date().toISOString(),
-      status: "complete",
-      result: analysis.isTampered ? "tampered" : "authentic",
+      status: analysis.status || "complete",
+      result: resultValue,
       confidence: analysis.confidence,
       metadata: analysis.metadata,
       anomalies: analysis.anomalies,

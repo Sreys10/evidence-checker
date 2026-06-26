@@ -448,16 +448,17 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
         }
     };
 
+    const loadEvidence = async () => {
+        const found = await getEvidenceById(evidenceId);
+        if (found) {
+            setEvidence(found);
+            setRenameValue(found.evidenceName || found.fileName);
+        }
+    };
+
     useEffect(() => {
-        const loadEvidence = async () => {
-            const found = await getEvidenceById(evidenceId);
-            if (found) {
-                setEvidence(found);
-                setRenameValue(found.evidenceName || found.fileName);
-                setActiveTab(initialTab || "details");
-            }
-        };
         loadEvidence();
+        setActiveTab(initialTab || "details");
     }, [evidenceId, initialTab]);
 
     if (!evidence) {
@@ -634,7 +635,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                 {evidence.type?.startsWith('video/') ? (
                                     <>
                                         <TabsTrigger value="video">Video AI</TabsTrigger>
-                                        <TabsTrigger value="metadata">Meta</TabsTrigger>
+                                        <TabsTrigger value="weapon">Weapon</TabsTrigger>
                                     </>
                                 ) : (
                                     <>
@@ -763,7 +764,33 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                                 }>
                                                     {evidence.status.toUpperCase()}
                                                 </Badge>
-                                            </div>
+                                                                            </div>
+                                            {evidence.status === 'complete' && (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    className="mt-3 w-full border-muted-foreground/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                                    onClick={async () => {
+                                                        const resetUpdates = {
+                                                            status: 'pending' as const,
+                                                            result: null,
+                                                            confidence: null,
+                                                            anomalies: [],
+                                                            metadata: null,
+                                                            aiDetection: null,
+                                                            weaponDetection: null,
+                                                        };
+                                                        setEvidence(prev => prev ? { ...prev, ...resetUpdates } : null);
+                                                        await fetch(`/api/evidence/${evidence.id || (evidence as any)._id}`, {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify(resetUpdates),
+                                                        });
+                                                    }}
+                                                >
+                                                    Re-run Forensic Checks
+                                                </Button>
+                                            )}
                                             {evidence.status === 'failed' && (
                                                 <div className="mt-4 flex flex-col gap-2 p-3 bg-red-500/10 text-red-600 rounded-lg text-xs border border-red-500/20">
                                                     <div className="flex items-center gap-2 font-semibold">
@@ -949,6 +976,7 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                                             preselectedEvidenceId={evidenceId} 
                                             isEmbedded={true} 
                                             autoStart={evidence.status !== 'complete'} 
+                                            onAnalysisComplete={loadEvidence}
                                         />
                                     </div>
                                 </TabsContent>
@@ -977,7 +1005,11 @@ export default function EvidenceDetail({ evidenceId, initialTab, onBack, onActio
                             {/* Tab Content: Weapon */}
                             <TabsContent value="weapon" className="mt-0 h-full">
                                 <div className="p-4">
-                                    <WeaponDetection preselectedEvidenceId={evidenceId} isEmbedded={true} />
+                                    <WeaponDetection 
+                                        preselectedEvidenceId={evidenceId} 
+                                        isEmbedded={true} 
+                                        onAnalysisComplete={loadEvidence}
+                                    />
                                 </div>
                             </TabsContent>
 

@@ -69,18 +69,174 @@ const dataURLtoFile = async (dataUrl: string, filename: string): Promise<File> =
 interface WeaponDetectionProps {
   preselectedEvidenceId?: string | null;
   isEmbedded?: boolean;
+  onAnalysisComplete?: () => void;
 }
 
 // ════════════════════════════════════════════════════════════
 //  Main Component
 // ════════════════════════════════════════════════════════════
-export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = false }: WeaponDetectionProps) {
+export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = false, onAnalysisComplete }: WeaponDetectionProps) {
   const [file,       setFile]       = useState<File | null>(null);
   const [preview,    setPreview]    = useState<string | null>(null);
   const [scanning,   setScanning]   = useState(false);
   const [result,     setResult]     = useState<WeaponResult | null>(null);
   const [error,      setError]      = useState<string | null>(null);
   const [showRaw,    setShowRaw]    = useState(false);
+
+  const performScan = async (fileToScan: File) => {
+    setScanning(true);
+    setError(null);
+    setResult(null);
+    try {
+      let resultData;
+      if (fileToScan.type?.startsWith("video/")) {
+        const objectUrl = URL.createObjectURL(fileToScan);
+
+        const video = document.createElement('video');
+        video.src = objectUrl;
+        video.crossOrigin = 'anonymous';
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => resolve();
+          video.onerror = () => reject(new Error('Failed to load video metadata'));
+          setTimeout(() => reject(new Error('Video metadata timeout')), 10000);
+        });
+
+        const frameCount = 5;
+        const duration = video.duration;
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D context not available');
+
+        const blobs: Blob[] = [];
+        const interval = duration / (frameCount + 1);
+
+        for (let i = 0; i < frameCount; i++) {
+          const seekTime = interval * (i + 1);
+          await new Promise<void>((resolve, reject) => {
+            let resolved = false;
+            const handleSeeked = () => {
+              if (resolved) return;
+              resolved = true;
+              try {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob((blob) => {
+                  if (blob) blobs.push(blob);
+                  resolve();
+                }, 'image/jpeg', 0.85);
+              } catch (err) {
+                reject(err);
+              }
+            };
+            video.onseeked = handleSeeked;
+            video.onerror = () => {
+              if (resolved) return;
+              resolved = true;
+              reject(new Error('Video seek error'));
+            };
+            setTimeout(() => {
+              if (resolved) return;
+              resolved = true;
+              ctx.fillStyle = 'black';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              canvas.toBlob((blob) => {
+                if (blob) blobs.push(blob);
+                resolve();
+              }, 'image/jpeg', 0.85);
+            }, 4000);
+            video.currentTime = Math.min(seekTime, duration - 0.1);
+          });
+        }
+
+        URL.revokeObjectURL(objectUrl);
+
+        const frameResults = await Promise.all(blobs.map(async (blob, index) => {
+          try {
+            const weaponFormData = new FormData();
+            weaponFormData.append("image", blob, `frame_${index}.jpg`);
+
+            const weaponRes = await fetch("/api/weapon-detection", {
+              method: "POST",
+              body: weaponFormData,
+            });
+            if (weaponRes.ok) {
+              const data = await weaponRes.json();
+              return data;
+            }
+          } catch (e) {
+            console.error('Frame weapon detection error:', e);
+          }
+          return null;
+        }));
+
+        const validResults = frameResults.filter(Boolean);
+        const detections: any[] = [];
+        const weaponsDetected: string[] = [];
+        validResults.forEach(r => {
+          if (r.detections) {
+            detections.push(...r.detections);
+          }
+          if (r.weaponsDetected) {
+            r.weaponsDetected.forEach((w: string) => {
+              if (!weaponsDetected.includes(w)) {
+                weaponsDetected.push(w);
+              }
+            });
+          }
+        });
+
+        const weaponsFound = validResults.some(r => r.weaponsFound);
+        const totalDetections = detections.length;
+
+        resultData = {
+          weaponsFound,
+          weaponsDetected,
+          detections,
+          totalDetections,
+          anomalies: weaponsFound ? [`Weapons detected in video frames: ${weaponsDetected.join(', ')}`] : [],
+          rawResult: { info: "Aggregated from 5 video frames" }
+        };
+      } else {
+        const fd = new FormData();
+        fd.append("image", fileToScan);
+        const res  = await fetch("/api/weapon-detection", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.details || data.error || "Detection failed");
+        
+        resultData = {
+          weaponsFound:    data.weaponsFound    ?? false,
+          weaponsDetected: data.weaponsDetected ?? [],
+          detections:      data.detections      ?? [],
+          anomalies:       data.anomalies       ?? [],
+          totalDetections: data.totalDetections ?? 0,
+          rawResult:       data.rawResult       ?? null,
+        };
+      }
+
+      setResult(resultData);
+
+      if (preselectedEvidenceId) {
+        const evidence = await getEvidenceById(preselectedEvidenceId);
+        if (evidence) {
+          evidence.weaponDetection = resultData;
+          await saveEvidence(evidence);
+        }
+      }
+
+      if (onAnalysisComplete) {
+        onAnalysisComplete();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setScanning(false);
+    }
+  };
 
   // ── load preselected evidence ────────────────────────────
   useEffect(() => {
@@ -106,33 +262,12 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
               });
             } else if (isEmbedded) {
               // Auto-scan on embed if not already run
-              setScanning(true);
-              const fd = new FormData();
-              fd.append("image", f);
-              const res  = await fetch("/api/weapon-detection", { method: "POST", body: fd });
-              const data = await res.json();
-              if (!res.ok || !data.success) throw new Error(data.details || data.error || "Detection failed");
-              
-              const resultData = {
-                weaponsFound:    data.weaponsFound    ?? false,
-                weaponsDetected: data.weaponsDetected ?? [],
-                detections:      data.detections      ?? [],
-                anomalies:       data.anomalies       ?? [],
-                totalDetections: data.totalDetections ?? 0,
-                rawResult:       data.rawResult       ?? null,
-              };
-              setResult(resultData);
-              
-              // Update evidence
-              found.weaponDetection = resultData;
-              await saveEvidence(found);
+              await performScan(f);
             }
           }
         } catch (e) {
           console.error("Failed to load preselected evidence in weapon detection", e);
           setError(e instanceof Error ? e.message : "Unknown error");
-        } finally {
-          setScanning(false);
         }
       }
     };
@@ -156,38 +291,7 @@ export default function WeaponDetection({ preselectedEvidenceId, isEmbedded = fa
   // ── run scan ─────────────────────────────────────────────
   const runScan = async () => {
     if (!file) return;
-    setScanning(true);
-    setError(null);
-    setResult(null);
-    try {
-      const fd = new FormData();
-      fd.append("image", file);
-      const res  = await fetch("/api/weapon-detection", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.details || data.error || "Detection failed");
-      
-      const resultData = {
-        weaponsFound:    data.weaponsFound    ?? false,
-        weaponsDetected: data.weaponsDetected ?? [],
-        detections:      data.detections      ?? [],
-        anomalies:       data.anomalies       ?? [],
-        totalDetections: data.totalDetections ?? 0,
-        rawResult:       data.rawResult       ?? null,
-      };
-      setResult(resultData);
-
-      if (preselectedEvidenceId) {
-        const evidence = await getEvidenceById(preselectedEvidenceId);
-        if (evidence) {
-          evidence.weaponDetection = resultData;
-          await saveEvidence(evidence);
-        }
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setScanning(false);
-    }
+    await performScan(file);
   };
 
   const verdictCls = result
