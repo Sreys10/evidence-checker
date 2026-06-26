@@ -167,11 +167,11 @@ export default function FaceRecognitionSearch() {
         distance: 1 - (res.confidence || 0) / 100,
         original_image_base64: res.person.registered_images?.[0] 
           ? getImageUrl(res.person.registered_images[0])
-          : "",
+          : undefined,
         metadata: {
-          age: res.person.age ? `${res.person.age} yrs` : "",
-          gender: res.person.gender || "",
-          notes: res.person.notes || ""
+          name: res.person.full_name,
+          age: res.person.age ? Number(res.person.age) : undefined,
+          notes: res.person.notes || undefined
         }
       } : null
     }));
@@ -224,11 +224,11 @@ export default function FaceRecognitionSearch() {
           distance: 1 - (res.confidence || 0) / 100,
           original_image_base64: res.person.registered_images?.[0] 
             ? getImageUrl(res.person.registered_images[0])
-            : "",
+            : undefined,
           metadata: {
-            age: res.person.age ? `${res.person.age} yrs` : "",
-            gender: res.person.gender || "",
-            notes: res.person.notes || ""
+            name: res.person.full_name,
+            age: res.person.age ? Number(res.person.age) : undefined,
+            notes: res.person.notes || undefined
           }
         } : null
       }));
