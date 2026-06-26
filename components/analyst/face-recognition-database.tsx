@@ -16,6 +16,7 @@ import {
   FileImage,
   Inbox,
   UserPlus,
+  Trash2,
 } from "lucide-react";
 
 interface RegisteredPerson {
@@ -40,6 +41,28 @@ export default function FaceRecognitionDatabase({ onNavigateToRegister }: FaceRe
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (personId: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}" from the biometrics database? This action cannot be undone.`)) {
+      return;
+    }
+    setDeletingId(personId);
+    try {
+      const response = await fetch(`/api/faces/delete/${personId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete person.");
+      }
+      setPersons((prev) => prev.filter((p) => p.id !== personId));
+    } catch (err: any) {
+      alert(err.message || "Failed to delete face biometric record.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const getImageUrl = (path: string) => {
     if (!path) return "";
@@ -225,8 +248,25 @@ export default function FaceRecognitionDatabase({ onNavigateToRegister }: FaceRe
                   </div>
 
                   <CardHeader className="p-5 pb-3">
-                    <CardTitle className="text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-2">
-                      {person.full_name}
+                    <CardTitle className="text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center justify-between gap-2">
+                      <span>{person.full_name}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(person.id, person.full_name);
+                        }}
+                        disabled={deletingId !== null}
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer shrink-0 transition-colors"
+                        title="Delete profile"
+                      >
+                        {deletingId === person.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
                     </CardTitle>
                     <CardDescription className="text-xs flex flex-wrap gap-x-3 gap-y-1 mt-1 text-muted-foreground">
                       {person.gender && <span>Gender: <strong className="text-foreground/80">{person.gender}</strong></span>}

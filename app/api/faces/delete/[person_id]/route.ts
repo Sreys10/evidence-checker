@@ -1,0 +1,38 @@
+import { NextRequest, NextResponse } from 'next/server';
+import axios from 'axios';
+
+const FACE_BACKEND_URL = process.env.FACE_BACKEND_URL || process.env.BACKEND_SERVICE_URL || 'http://localhost:5001';
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ person_id: string }> }
+) {
+  try {
+    const personId = (await params).person_id;
+    const backendUrl = `${FACE_BACKEND_URL}/api/faces/delete/${personId}`;
+    console.log(`[Faces Proxy] Proxying face deletion to FastAPI: ${backendUrl}`);
+
+    const response = await axios.delete(backendUrl, {
+      headers: {
+        'X-API-Key': process.env.EVI_CHECK_API_KEY || 'default-api-key-replace-me',
+      }
+    });
+
+    return NextResponse.json(response.data, { status: 200 });
+  } catch (error: any) {
+    console.error('[Faces API Proxy] Delete person error:', error);
+    
+    if (error.response) {
+      return NextResponse.json(
+        { error: error.response.data?.detail || error.response.data?.error || 'FastAPI service error', success: false },
+        { status: error.response.status || 500 }
+      );
+    }
+    
+    const errMsg = error instanceof Error ? error.message : 'Failed to connect to FastAPI face recognition service';
+    return NextResponse.json(
+      { error: errMsg, success: false, details: 'Ensure the FastAPI service is running on port 5001' },
+      { status: 503 }
+    );
+  }
+}
