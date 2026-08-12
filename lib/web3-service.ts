@@ -24,6 +24,25 @@ declare global {
   }
 }
 
+/** Helper to format RPC and ethers.js errors into human-readable messages */
+function handleRpcError(error: any): never {
+  console.error("Web3 RPC Error:", error);
+  const msg = error?.message || String(error);
+  if (msg.includes("-32002") || msg.includes("too many errors") || msg.includes("coalesce")) {
+    throw new Error(
+      "RPC Endpoint Error (-32002): MetaMask RPC rate limit or network error. " +
+      "Please switch your MetaMask network to 'Hardhat Localhost' (http://127.0.0.1:8545, Chain ID 31337)."
+    );
+  }
+  if (msg.includes("could not coalesce error")) {
+    throw new Error(
+      "RPC Connection Failed: Unable to communicate with the Ethereum node. " +
+      "Ensure local Hardhat node is running at http://127.0.0.1:8545."
+    );
+  }
+  throw error instanceof Error ? error : new Error(msg);
+}
+
 /**
  * Forces MetaMask to switch to the local Hardhat network.
  * Adds the network automatically if it's not yet configured.
@@ -72,18 +91,22 @@ async function ensureHardhatNetwork(): Promise<void> {
         "You rejected the network switch. Please switch MetaMask to 'Hardhat Localhost' (Chain ID 31337) and try again."
       );
     } else {
-      throw switchError;
+      handleRpcError(switchError);
     }
   }
 
-  // Final safety check — verify we're actually on Hardhat now
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  const network = await provider.getNetwork();
-  if (network.chainId !== HARDHAT_CHAIN_ID_DECIMAL) {
-    throw new Error(
-      `Wrong network detected (Chain ID: ${network.chainId}). ` +
-      "Please switch MetaMask to 'Hardhat Localhost' (Chain ID 31337) and try again."
-    );
+  // Final safety check — verify chainId directly via ethereum provider
+  try {
+    const currentChainIdHex = await window.ethereum.request({ method: "eth_chainId" });
+    if (BigInt(currentChainIdHex) !== HARDHAT_CHAIN_ID_DECIMAL) {
+      throw new Error(
+        `Wrong network detected (Chain ID: ${currentChainIdHex}). ` +
+        "Please switch MetaMask to 'Hardhat Localhost' (Chain ID 31337) and try again."
+      );
+    }
+  } catch (e: any) {
+    if (e.message?.includes("Wrong network")) throw e;
+    handleRpcError(e);
   }
 }
 
@@ -93,18 +116,23 @@ export async function connectWallet(): Promise<string> {
     throw new Error("MetaMask is not installed!");
   }
 
-  // 1. Request account access
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  const accounts: string[] = await provider.send("eth_requestAccounts", []);
+  try {
+    // 1. Switch network FIRST so provider connects to Hardhat RPC
+    await ensureHardhatNetwork();
 
-  if (!accounts || accounts.length === 0) {
-    throw new Error("No accounts connected.");
+    // 2. Request account access via raw RPC to avoid prematurely triggering ethers block polling
+    const accounts: string[] = await window.ethereum.request({
+      method: "eth_requestAccounts",
+    });
+
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts connected.");
+    }
+
+    return accounts[0];
+  } catch (err: any) {
+    return handleRpcError(err);
   }
-
-  // 2. Always enforce Hardhat Localhost network
-  await ensureHardhatNetwork();
-
-  return accounts[0];
 }
 
 /**
@@ -125,25 +153,29 @@ export async function storeEvidenceOnBlockchain(
     throw new Error("ImageStorage contract not deployed. Run: npx hardhat run scripts/deploy.js --network localhost");
   }
 
-  // ⚡ Always switch to Hardhat BEFORE sending the transaction
-  await ensureHardhatNetwork();
+  try {
+    // ⚡ Always switch to Hardhat BEFORE instantiating BrowserProvider
+    await ensureHardhatNetwork();
 
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  const signer = await provider.getSigner();
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, signer);
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, signer);
 
-  // Convert confidence to integer if it's a float
-  const score = Math.round(confidenceScore);
+    // Convert confidence to integer if it's a float
+    const score = Math.round(confidenceScore);
 
-  const tx: ethers.TransactionResponse = await contract.storeEvidence(
-    ipfsHash,
-    analystId,
-    score,
-    status
-  );
-  const receipt = await tx.wait();
-  if (!receipt) throw new Error("Transaction failed – no receipt returned.");
-  return receipt;
+    const tx: ethers.TransactionResponse = await contract.storeEvidence(
+      ipfsHash,
+      analystId,
+      score,
+      status
+    );
+    const receipt = await tx.wait();
+    if (!receipt) throw new Error("Transaction failed – no receipt returned.");
+    return receipt;
+  } catch (err: any) {
+    return handleRpcError(err);
+  }
 }
 
 /**
@@ -167,17 +199,23 @@ export async function getEvidenceFromBlockchain(
 
   if (CONTRACT_ADDRESS === "0xNotDeployedYet") return [];
 
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
+  try {
+    await ensureHardhatNetwork();
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
 
-  const records = await contract.getEvidence(userAddress);
-  return records.map((r: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-    ipfsHash: r.ipfsHash,
-    analystId: r.analystId,
-    confidenceScore: Number(r.confidenceScore),
-    status: r.status,
-    timestamp: Number(r.timestamp)
-  }));
+    const records = await contract.getEvidence(userAddress);
+    return records.map((r: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ipfsHash: r.ipfsHash,
+      analystId: r.analystId,
+      confidenceScore: Number(r.confidenceScore),
+      status: r.status,
+      timestamp: Number(r.timestamp)
+    }));
+  } catch (err: any) {
+    console.warn("Could not fetch blockchain records:", err);
+    return [];
+  }
 }
 
 /**
@@ -192,9 +230,16 @@ export async function getHashesFromBlockchain(
 
   if (CONTRACT_ADDRESS === "0xNotDeployedYet") return [];
 
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
+  try {
+    await ensureHardhatNetwork();
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, IMAGE_STORAGE_ABI, provider);
 
-  const hashes: string[] = await contract.getHashes(userAddress);
-  return hashes;
+    const hashes: string[] = await contract.getHashes(userAddress);
+    return hashes;
+  } catch (err: any) {
+    console.warn("Could not fetch blockchain hashes:", err);
+    return [];
+  }
 }
+
