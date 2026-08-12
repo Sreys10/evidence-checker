@@ -320,11 +320,18 @@ export default function AnalystPage() {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group relative ${isActive
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group relative border ${isActive
+                  ? "bg-primary/10 text-primary border-primary/20 dark:bg-primary/15 dark:border-primary/25"
+                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground border-transparent"
                   } ${sidebarCollapsed ? "justify-center px-2" : ""}`}
               >
+                {isActive && !sidebarCollapsed && (
+                  <motion.div
+                    layoutId="active-tab-bar"
+                    className="absolute left-1 top-2.5 bottom-2.5 w-1 rounded-full bg-primary"
+                    transition={{ type: "spring", stiffness: 350, damping: 28 }}
+                  />
+                )}
                 <div className="relative shrink-0">
                   <Icon className={`h-4 w-4 ${sidebarCollapsed ? "h-5 w-5" : ""}`} />
                   {'badge' in tab && (tab as {badge?: number}).badge && (tab as {badge?: number}).badge! > 0 && (
@@ -437,7 +444,13 @@ export default function AnalystPage() {
                   {activeTab === "overview" && (
                     <DashboardOverview
                       stats={stats}
+                      userName={currentUser?.name}
                       onNavigate={(tab) => setActiveTab(tab as ActiveTab)}
+                      onNavigateToEvidence={(id) => {
+                        setViewingEvidenceId(id);
+                        setEvidenceDetailInitialTab("details");
+                        setActiveTab("evidence-detail");
+                      }}
                     />
                   )}
                   {activeTab === "upload" && (
@@ -793,9 +806,9 @@ export default function AnalystPage() {
                   <button
                     key={tab.id}
                     onClick={() => { setActiveTab(tab.id); setIsMobileSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${isActive
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all border ${isActive
+                      ? "bg-primary/10 text-primary border-primary/20 dark:bg-primary/15 dark:border-primary/25"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted border-transparent"
                       }`}
                   >
                     <Icon className="h-4 w-4 flex-shrink-0" />

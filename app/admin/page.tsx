@@ -292,7 +292,7 @@ export default function AdminPage() {
               <Menu className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="font-bold text-lg text-foreground leading-tight">
+              <h1 className="font-bold text-2xl text-foreground leading-tight">
                 {activeTab === 'overview' ? `Welcome back, ${getFirstName(currentUser?.name)} 👋` :
                  activeTab === 'users' ? 'User Management' :
                  activeTab === 'notifications' ? 'Notifications' :
@@ -301,15 +301,7 @@ export default function AdminPage() {
                  activeTab === 'evidence-detail' ? 'Evidence Details' :
                  activeTab === 'chats' ? 'Team Chat' : 'Settings'}
               </h1>
-              <p className="text-xs text-muted-foreground hidden sm:block">
-                {activeTab === 'overview' ? 'System overview and quick actions' :
-                 activeTab === 'users' ? `${totalUsers} registered users` :
-                 activeTab === 'notifications' ? `${unreadCount} unread notifications` :
-                 activeTab === 'flagged' ? `${flaggedReports.length} reports flagged for review` :
-                 activeTab === 'records' ? 'View and search case evidence records' :
-                 activeTab === 'evidence-detail' ? 'Detailed forensic visualization' :
-                 activeTab === 'chats' ? 'Chat with your team' : 'Profile and preferences'}
-              </p>
+
               {activeTab === 'overview' && currentTime && (
                 <p className="text-[10px] font-mono text-muted-foreground/80 mt-1 flex items-center gap-2">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

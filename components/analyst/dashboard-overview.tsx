@@ -13,6 +13,7 @@ import {
     Search,
     Upload,
     ImageIcon,
+    ExternalLink,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,11 +28,9 @@ import {
     CartesianGrid,
     Tooltip as RechartsTooltip,
     ResponsiveContainer,
-    PieChart,
-    Pie,
-    Cell,
     BarChart,
     Bar,
+    Cell,
 } from "recharts";
 
 interface DashboardOverviewProps {
@@ -43,9 +42,71 @@ interface DashboardOverviewProps {
         onBlockchain: number;
     };
     onNavigate: (tab: string) => void;
+    onNavigateToEvidence?: (id: string) => void;
+    userName?: string;
 }
 
-export default function DashboardOverview({ stats, onNavigate }: DashboardOverviewProps) {
+// ─── Pure SVG Donut ────────────────────────────────────────────────────────────
+// Renders instantly — no ResizeObserver / Recharts PieChart overhead.
+function SvgDonut({ data }: { data: { name: string; value: number; color: string }[] }) {
+    const size = 180;
+    const cx = size / 2;
+    const cy = size / 2;
+    const R = 70;   // outer radius
+    const r = 50;   // inner radius (hole)
+    const gap = 3;  // gap between segments in degrees
+
+    const total = data.reduce((s, d) => s + d.value, 0);
+    if (total === 0) return null;
+
+    // Build arc paths
+    let cursor = -90; // start at 12 o'clock
+    const segments = data.map((d) => {
+        const deg = (d.value / total) * 360 - gap;
+        const startAngle = cursor;
+        cursor += deg + gap;
+        const endAngle = startAngle + deg;
+        const toRad = (a: number) => (a * Math.PI) / 180;
+        const x1 = cx + R * Math.cos(toRad(startAngle));
+        const y1 = cy + R * Math.sin(toRad(startAngle));
+        const x2 = cx + R * Math.cos(toRad(endAngle));
+        const y2 = cy + R * Math.sin(toRad(endAngle));
+        const x3 = cx + r * Math.cos(toRad(endAngle));
+        const y3 = cy + r * Math.sin(toRad(endAngle));
+        const x4 = cx + r * Math.cos(toRad(startAngle));
+        const y4 = cy + r * Math.sin(toRad(startAngle));
+        const large = deg > 180 ? 1 : 0;
+        const path = `M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${r} ${r} 0 ${large} 0 ${x4} ${y4} Z`;
+        return { ...d, path };
+    });
+
+    return (
+        <div className="flex items-center gap-6 w-full justify-center">
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                {segments.map((seg, i) => (
+                    <path key={i} d={seg.path} fill={seg.color} opacity={0.9}>
+                        <title>{seg.name}: {seg.value}</title>
+                    </path>
+                ))}
+                {/* Centre label */}
+                <text x={cx} y={cy - 6} textAnchor="middle" className="fill-foreground" style={{ fontSize: 22, fontWeight: 700 }}>{total}</text>
+                <text x={cx} y={cy + 14} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>Total</text>
+            </svg>
+            {/* Legend */}
+            <div className="flex flex-col gap-2.5">
+                {segments.map((seg, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                        <span className="h-3 w-3 rounded-sm flex-shrink-0" style={{ background: seg.color }} />
+                        <span className="text-muted-foreground">{seg.name}</span>
+                        <span className="font-bold text-foreground ml-1">{seg.value}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export default function DashboardOverview({ stats, onNavigate, onNavigateToEvidence, userName }: DashboardOverviewProps) {
     const [recentEvidence, setRecentEvidence] = useState<StoredEvidence[]>([]);
     const [trendData, setTrendData] = useState<{ display: string; uploads: number }[]>([]);
     const [donutData, setDonutData] = useState<{ name: string; value: number; color: string }[]>([]);
@@ -161,6 +222,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
             icon: Briefcase,
             color: "text-indigo-600 dark:text-indigo-400",
             bg: "bg-indigo-100 dark:bg-indigo-900/20",
+            glowClass: "glow-indigo",
         },
         {
             title: "Total Evidence",
@@ -168,6 +230,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
             icon: Activity,
             color: "text-blue-600 dark:text-blue-400",
             bg: "bg-blue-100 dark:bg-blue-900/20",
+            glowClass: "glow-blue",
         },
         {
             title: "Verified",
@@ -175,6 +238,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
             icon: Shield,
             color: "text-emerald-600 dark:text-emerald-400",
             bg: "bg-emerald-100 dark:bg-emerald-900/20",
+            glowClass: "glow-emerald",
         },
         {
             title: "Blockchain Secured",
@@ -182,6 +246,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
             icon: CheckCircle2,
             color: "text-purple-600 dark:text-purple-400",
             bg: "bg-purple-100 dark:bg-purple-900/20",
+            glowClass: "glow-purple",
         },
     ];
 
@@ -207,9 +272,9 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
             {/* Welcome Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Dashboard Overview</h2>
+                    <h2 className="text-3xl font-bold tracking-tight">Analyst Dashboard</h2>
                     <p className="text-muted-foreground mt-1">
-                        Welcome back. Here's your real-time evidence analysis.
+                        Welcome back, {userName || "Analyst"}!
                     </p>
                     {currentTime && (
                         <p className="text-sm font-mono text-muted-foreground/80 mt-1.5 flex items-center gap-2">
@@ -234,7 +299,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {overviewStats.map((stat) => (
                     <motion.div key={stat.title} variants={item}>
-                        <Card className="hover:shadow-md transition-shadow">
+                        <Card className={`glow-card ${stat.glowClass} border hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300`}>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">
                                     {stat.title}
@@ -287,7 +352,14 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                 />
                                 <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
                                 <RechartsTooltip 
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    contentStyle={{ 
+                                        backgroundColor: "var(--card)", 
+                                        borderColor: "var(--border)", 
+                                        borderRadius: '8px', 
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)' 
+                                    }}
+                                    itemStyle={{ color: "var(--foreground)" }}
+                                    labelStyle={{ color: "var(--muted-foreground)" }}
                                 />
                                 <Area type="monotone" dataKey="uploads" stroke="#8884d8" fillOpacity={1} fill="url(#colorUploads)" />
                             </AreaChart>
@@ -308,27 +380,7 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                 No analyzed data yet
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={donutData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {donutData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <RechartsTooltip 
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                        itemStyle={{ fontWeight: 'bold' }}
-                                    />
-                                </PieChart>
-                            </ResponsiveContainer>
+                            <SvgDonut data={donutData} />
                         )}
                     </CardContent>
                 </Card>
@@ -355,7 +407,14 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
                                     <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
                                     <RechartsTooltip 
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        contentStyle={{ 
+                                            backgroundColor: "var(--card)", 
+                                            borderColor: "var(--border)", 
+                                            borderRadius: '8px', 
+                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)' 
+                                        }}
+                                        itemStyle={{ color: "var(--foreground)" }}
+                                        labelStyle={{ color: "var(--muted-foreground)" }}
                                     />
                                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                                         {caseResolutionData.map((entry, index) => (
@@ -387,9 +446,11 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                     <p className="text-xs">Upload some evidence to see it appear here</p>
                                 </div>
                             ) : (
-                                recentEvidence.map((ev) => (
-                                    <div key={ev.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-                                        <div className="flex items-center gap-4">
+                                recentEvidence.map((ev) => {
+                                    const evId = ev.id || (ev as any)._id;
+                                    return (
+                                    <div key={evId} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors group">
+                                        <div className="flex items-center gap-4 min-w-0 flex-1">
                                             {/* Preview Thumbnail Box */}
                                             <div className="flex-shrink-0 relative overflow-hidden h-12 w-12 rounded-md border bg-muted flex flex-col justify-center items-center">
                                                 {ev.imageData ? (
@@ -400,8 +461,8 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                                 )}
                                             </div>
                                             
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-medium leading-none">
+                                            <div className="space-y-1 min-w-0">
+                                                <p className="text-sm font-medium leading-none truncate max-w-[200px]">
                                                     {ev.fileName}
                                                 </p>
                                                 <p className="text-xs text-muted-foreground flex items-center gap-2">
@@ -415,8 +476,8 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                             </div>
                                         </div>
 
-                                        {/* Status Badge */}
-                                        <div className="flex-shrink-0">
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            {/* Status Badge */}
                                             {ev.status !== 'complete' ? (
                                                 <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
                                                     Pending Analysis
@@ -432,9 +493,23 @@ export default function DashboardOverview({ stats, onNavigate }: DashboardOvervi
                                                     Authentic
                                                 </Badge>
                                             )}
+
+                                            {/* Analyse button — appears on hover or always visible */}
+                                            {onNavigateToEvidence && evId && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-7 px-2.5 text-xs gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={() => onNavigateToEvidence(evId)}
+                                                >
+                                                    <ExternalLink className="h-3 w-3" />
+                                                    Analyse
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </CardContent>

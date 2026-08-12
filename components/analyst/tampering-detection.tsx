@@ -139,25 +139,29 @@ export default function TamperingDetection({
 
   const loadEvidenceFromStorage = async () => {
     const storedEvidence = await getAllEvidence();
-    const analyzedEvidence = storedEvidence.filter(e => e.status === "complete");
+    // Sort by uploadDate descending and pick only the latest complete one
+    const latest = storedEvidence
+      .filter(e => e.status === "complete")
+      .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime())[0];
 
-    const detectionResults: DetectionResult[] = analyzedEvidence.map(evidence => ({
-      id: evidence.id || (evidence as any)._id,
-      fileName: evidence.fileName,
-      imagePreview: evidence.imageData,
+    if (!latest) return;
+
+    const latestResult: DetectionResult = {
+      id: latest.id || (latest as any)._id,
+      fileName: latest.fileName,
+      imagePreview: latest.imageData,
       status: "complete" as const,
-      result: evidence.result ? {
-        isTampered: evidence.result === "tampered",
-        confidence: evidence.confidence || 0,
-        anomalies: evidence.anomalies || [],
-        metadata: evidence.metadata || {},
-
-        aiDetection: evidence.aiDetection,
-        weaponDetection: evidence.weaponDetection,
+      result: latest.result ? {
+        isTampered: latest.result === "tampered",
+        confidence: latest.confidence || 0,
+        anomalies: latest.anomalies || [],
+        metadata: latest.metadata || {},
+        aiDetection: latest.aiDetection,
+        weaponDetection: latest.weaponDetection,
       } : null,
-    }));
+    };
 
-    setResults(detectionResults);
+    setResults([latestResult]);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,7 +191,8 @@ export default function TamperingDetection({
       };
 
       setCurrentAnalysis(newAnalysis);
-      setResults((prev) => [newAnalysis, ...prev]);
+      // Replace the single displayed result with the new in-progress one
+      setResults([newAnalysis]);
 
       try {
         // First, save the evidence to storage
@@ -241,13 +246,8 @@ export default function TamperingDetection({
           });
 
           setCurrentAnalysis(null);
-          setResults((prev) =>
-            prev.map((r) =>
-              r.id === newAnalysis.id
-                ? { ...r, status: "complete", result: analysisResult }
-                : r
-            )
-          );
+          // Replace with the single completed result
+          setResults([{ ...newAnalysis, status: "complete", result: analysisResult }]);
         } else {
           throw new Error('Invalid response from server');
         }
@@ -408,12 +408,16 @@ export default function TamperingDetection({
         )
       }
 
-      {/* Results */}
+      {/* Results — only shows the latest single result */}
       {
-        (isEmbedded ? results.filter(r => r.id === preselectedEvidenceId) : results).length > 0 && (
+        (() => {
+          const displayResults = isEmbedded
+            ? results.filter(r => r.id === preselectedEvidenceId)
+            : results.slice(0, 1); // Only the latest result
+          return displayResults.length > 0 && (
           <div className="space-y-4">
-            {!isEmbedded && <h2 className="text-xl font-semibold text-foreground">Analysis Results</h2>}
-            {(isEmbedded ? results.filter(r => r.id === preselectedEvidenceId) : results).map((result) => (
+            {!isEmbedded && <h2 className="text-xl font-semibold text-foreground">Analysis Result</h2>}
+            {displayResults.map((result) => (
               <Card key={result.id} className={isEmbedded ? "border-0 shadow-none bg-transparent" : ""}>
                 <CardContent className={isEmbedded ? "p-0" : "p-6"}>
                   <div className={isEmbedded ? "space-y-4" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}>
@@ -434,152 +438,140 @@ export default function TamperingDetection({
                     {/* Analysis Results */}
                     {result.result && (
                       <div className={isEmbedded ? "w-full space-y-4" : "lg:col-span-2 space-y-4"}>
-                        {/* Status Badge */}
-                        <div className="flex items-center gap-3">
+                        {/* Verdict Header */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/30 p-3.5 rounded-xl border border-border">
+                          <div className="flex items-center gap-3">
+                            {result.result.isTampered ? (
+                              <Badge variant="destructive" className="text-sm px-3 py-1 font-semibold">
+                                <AlertTriangle className="h-4 w-4 mr-1.5 shrink-0" />
+                                Tampered — {result.result.confidence.toFixed(1)}% Confidence
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-1 font-semibold">
+                                <CheckCircle2 className="h-4 w-4 mr-1.5 shrink-0" />
+                                Authentic — {result.result.confidence.toFixed(1)}% Confidence
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            ID: {result.id.slice(0, 12)}
+                          </span>
+                        </div>
+
+                        {/* Anomalies / Integrity Status */}
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Forensic Integrity & Anomalies</p>
                           {result.result.isTampered ? (
-                            <Badge variant="destructive" className="text-sm">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              Tampered - {result.result.confidence.toFixed(1)}% Confidence
-                            </Badge>
+                            <ul className="space-y-2 bg-destructive/5 border border-destructive/20 p-3.5 rounded-xl">
+                              {result.result.anomalies && result.result.anomalies.length > 0 ? (
+                                result.result.anomalies.map((anomaly, idx) => (
+                                  <li key={idx} className="text-sm text-destructive font-medium flex items-start gap-2">
+                                    <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                                    <span>{anomaly}</span>
+                                  </li>
+                                ))
+                              ) : (
+                                <li className="text-sm text-destructive font-medium flex items-start gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                                  <span>AI Forensic model detected synthetic content manipulation / deepfake patterns in this image.</span>
+                                </li>
+                              )}
+                            </ul>
                           ) : (
-                            <Badge className="bg-green-500 text-white text-sm">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Authentic - {result.result.confidence.toFixed(1)}% Confidence
-                            </Badge>
+                            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                              <span className="text-xs font-medium">
+                                No tampering anomalies detected across Error Level Analysis (ELA), PRNU sensor check, and metadata checksums.
+                              </span>
+                            </div>
                           )}
                         </div>
 
 
 
-                        {/* Anomalies */}
-                        {result.result.anomalies.length > 0 && (
-                          <div>
-                            <p className="text-sm font-medium text-foreground mb-2">Detected Anomalies:</p>
-                            <ul className="space-y-1">
-                              {result.result.anomalies.map((anomaly, idx) => (
-                                <li key={idx} className="text-sm text-muted-foreground flex items-start gap-2">
-                                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
-                                  {anomaly}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Metadata */}
-                        <div className="pt-4 border-t border-border">
-                          <p className="text-sm font-medium text-foreground mb-2">Metadata:</p>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            {result.result.metadata.camera && (
-                              <div>
-                                <span className="text-muted-foreground">Camera: </span>
-                                <span className="text-foreground">{result.result.metadata.camera}</span>
-                              </div>
-                            )}
-                            {result.result.metadata.date && (
-                              <div>
-                                <span className="text-muted-foreground">Date: </span>
-                                <span className="text-foreground">{result.result.metadata.date}</span>
-                              </div>
-                            )}
-                            {result.result.metadata.location && (
-                              <div>
-                                <span className="text-muted-foreground">Location: </span>
-                                <span className="text-foreground">{result.result.metadata.location}</span>
-                              </div>
-                            )}
-                            {result.result.metadata.software && (
-                              <div>
-                                <span className="text-muted-foreground">Software: </span>
-                                <span className="text-foreground">{result.result.metadata.software}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* AI Detection Results */}
+                        {/* AI Detection Analytics */}
                         {result.result.aiDetection && (
-                          <div className="pt-4 border-t border-border">
-                            <p className="text-sm font-medium text-foreground mb-3">AI Detection Results:</p>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="bg-muted/50 p-3 rounded-lg">
-                                <p className="text-xs text-muted-foreground mb-1">Deepfake Probability</p>
+                          <div className="pt-3 border-t border-border">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">AI & Forensics Metrics</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-muted/40 border border-border/60 p-3 rounded-xl">
+                                <p className="text-[11px] font-medium text-muted-foreground mb-1">Deepfake Probability</p>
                                 <div className="flex items-center gap-2">
                                   <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                     <motion.div
-                                      className={`h-full ${result.result.aiDetection.deepfake > 0.5 ? 'bg-red-500' : 'bg-green-500'}`}
+                                      className={`h-full ${result.result.aiDetection.deepfake > 0.5 ? 'bg-red-500' : 'bg-emerald-500'}`}
                                       initial={{ width: 0 }}
                                       animate={{ width: `${result.result.aiDetection.deepfake * 100}%` }}
-                                      transition={{ duration: 1, delay: 0.8 }}
+                                      transition={{ duration: 1, delay: 0.2 }}
                                     />
                                   </div>
-                                  <span className="text-sm font-medium">
+                                  <span className="text-xs font-bold font-mono">
                                     {(result.result.aiDetection.deepfake * 100).toFixed(1)}%
                                   </span>
                                 </div>
                               </div>
-                              <div className="bg-muted/50 p-3 rounded-lg">
-                                <p className="text-xs text-muted-foreground mb-1">AI-Generated Content</p>
+                              <div className="bg-muted/40 border border-border/60 p-3 rounded-xl">
+                                <p className="text-[11px] font-medium text-muted-foreground mb-1">AI-Generated Content</p>
                                 <div className="flex items-center gap-2">
                                   <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                     <motion.div
-                                      className={`h-full ${result.result.aiDetection.aiGenerated > 0.5 ? 'bg-red-500' : 'bg-green-500'}`}
+                                      className={`h-full ${result.result.aiDetection.aiGenerated > 0.5 ? 'bg-red-500' : 'bg-emerald-500'}`}
                                       initial={{ width: 0 }}
                                       animate={{ width: `${result.result.aiDetection.aiGenerated * 100}%` }}
-                                      transition={{ duration: 1, delay: 1 }}
+                                      transition={{ duration: 1, delay: 0.3 }}
                                     />
                                   </div>
-                                  <span className="text-sm font-medium">
+                                  <span className="text-xs font-bold font-mono">
                                     {(result.result.aiDetection.aiGenerated * 100).toFixed(1)}%
                                   </span>
                                 </div>
                               </div>
-                              <div className="bg-muted/50 p-3 rounded-lg">
-                                <p className="text-xs text-muted-foreground mb-1">Image Quality</p>
+                              <div className="bg-muted/40 border border-border/60 p-3 rounded-xl">
+                                <p className="text-[11px] font-medium text-muted-foreground mb-1">Image Quality</p>
                                 <div className="flex items-center gap-2">
                                   <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                     <motion.div
-                                      className={`h-full ${result.result.aiDetection.quality > 0.7 ? 'bg-green-500' : result.result.aiDetection.quality > 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                      className={`h-full ${result.result.aiDetection.quality > 0.7 ? 'bg-emerald-500' : result.result.aiDetection.quality > 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                       initial={{ width: 0 }}
                                       animate={{ width: `${result.result.aiDetection.quality * 100}%` }}
-                                      transition={{ duration: 1, delay: 1.2 }}
+                                      transition={{ duration: 1, delay: 0.4 }}
                                     />
                                   </div>
-                                  <span className="text-sm font-medium">
+                                  <span className="text-xs font-bold font-mono">
                                     {(result.result.aiDetection.quality * 100).toFixed(1)}%
                                   </span>
                                 </div>
                               </div>
-                              <div className="bg-muted/50 p-3 rounded-lg">
-                                <p className="text-xs text-muted-foreground mb-1">Scammer Detection</p>
+                              <div className="bg-muted/40 border border-border/60 p-3 rounded-xl">
+                                <p className="text-[11px] font-medium text-muted-foreground mb-1">Scammer / Fraud Signal</p>
                                 <div className="flex items-center gap-2">
                                   <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                     <motion.div
-                                      className={`h-full ${result.result.aiDetection.scamProb > 0.5 ? 'bg-red-500' : 'bg-green-500'}`}
+                                      className={`h-full ${result.result.aiDetection.scamProb > 0.5 ? 'bg-red-500' : 'bg-emerald-500'}`}
                                       initial={{ width: 0 }}
                                       animate={{ width: `${result.result.aiDetection.scamProb * 100}%` }}
-                                      transition={{ duration: 1, delay: 1.4 }}
+                                      transition={{ duration: 1, delay: 0.5 }}
                                     />
                                   </div>
-                                  <span className="text-sm font-medium">
+                                  <span className="text-xs font-bold font-mono">
                                     {(result.result.aiDetection.scamProb * 100).toFixed(1)}%
                                   </span>
                                 </div>
                               </div>
                               {result.result.weaponDetection && (
-                                <div className="bg-muted/50 p-3 rounded-lg">
-                                  <p className="text-xs text-muted-foreground mb-1">Weapon Detection</p>
+                                <div className="bg-muted/40 border border-border/60 p-3 rounded-xl col-span-2">
+                                  <p className="text-[11px] font-medium text-muted-foreground mb-1">Weapon / Threat Detection</p>
                                   <div className="flex items-center gap-2">
                                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                       <motion.div
-                                        className={`h-full ${result.result.weaponDetection.weaponsFound ? 'bg-red-500' : 'bg-green-500'}`}
+                                        className={`h-full ${result.result.weaponDetection.weaponsFound ? 'bg-red-500' : 'bg-emerald-500'}`}
                                         initial={{ width: 0 }}
                                         animate={{ width: result.result.weaponDetection.weaponsFound ? '100%' : '0%' }}
-                                        transition={{ duration: 1, delay: 1.6 }}
+                                        transition={{ duration: 1, delay: 0.6 }}
                                       />
                                     </div>
-                                    <span className={`text-sm font-medium ${result.result.weaponDetection.weaponsFound ? 'text-red-500' : 'text-green-500'}`}>
-                                      {result.result.weaponDetection.weaponsFound ? 'Threat' : 'Safe'}
+                                    <span className={`text-xs font-bold ${result.result.weaponDetection.weaponsFound ? 'text-red-500' : 'text-emerald-500'}`}>
+                                      {result.result.weaponDetection.weaponsFound ? `Threat (${result.result.weaponDetection.weaponsDetected.join(', ') || 'Weapon Found'})` : 'Safe (No Weapon)'}
                                     </span>
                                   </div>
                                 </div>
@@ -594,7 +586,8 @@ export default function TamperingDetection({
               </Card>
             ))}
           </div>
-        )
+          );
+        })()
       }
       </>
     </div>

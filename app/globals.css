@@ -7,6 +7,8 @@
 
 /* --- Theme Configuration for Tailwind v4 --- */
 @theme {
+  --font-sans: var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -200,6 +202,8 @@
 }
 
 @theme inline {
+  --font-sans: var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -264,3 +268,33 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+/* --- Premium Glow Utilities --- */
+.glow-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glow-card:hover {
+  box-shadow: 0 10px 30px -10px var(--glow-color, rgba(0, 0, 0, 0.05));
+  border-color: var(--glow-border, var(--border));
+}
+
+.glow-indigo {
+  --glow-color: rgba(99, 102, 241, 0.12);
+  --glow-border: rgba(99, 102, 241, 0.25);
+}
+
+.glow-emerald {
+  --glow-color: rgba(16, 185, 129, 0.12);
+  --glow-border: rgba(16, 185, 129, 0.25);
+}
+
+.glow-purple {
+  --glow-color: rgba(168, 85, 247, 0.12);
+  --glow-border: rgba(168, 85, 247, 0.25);
+}
+
+.glow-blue {
+  --glow-color: rgba(59, 130, 246, 0.12);
+  --glow-border: rgba(59, 130, 246, 0.25);
+}
+

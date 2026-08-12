@@ -342,7 +342,7 @@ export default function MetadataAnalysis({ preselectedEvidenceId, isEmbedded = f
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
 
                     {/* Verdict Banner */}
-                    <Card className={`border ${rs.border} overflow-hidden`}>
+                    <Card className={`border ${rs.border} overflow-hidden relative`}>
                         <div className={`absolute inset-0 bg-gradient-to-r ${rs.gradient} pointer-events-none`} />
                         <CardContent className="py-5 px-5 relative">
                             <div className="flex items-center gap-4 flex-wrap">
